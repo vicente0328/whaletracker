@@ -1,0 +1,49 @@
+{
+  "_comment": "Your personal holdings. Edit this file to reflect your actual portfolio.",
+  "_schema": {
+    "ticker": "Stock symbol (e.g. AAPL)",
+    "quantity": "Number of shares held",
+    "avg_cost": "Average cost basis per share in USD",
+    "sector": "GICS sector for weighting analysis"
+  },
+  "holdings": [
+    {
+      "ticker": "AAPL",
+      "quantity": 50,
+      "avg_cost": 172.50,
+      "sector": "Technology"
+    },
+    {
+      "ticker": "MSFT",
+      "quantity": 30,
+      "avg_cost": 310.00,
+      "sector": "Technology"
+    },
+    {
+      "ticker": "XLE",
+      "quantity": 40,
+      "avg_cost": 88.00,
+      "sector": "Energy"
+    },
+    {
+      "ticker": "BRK-B",
+      "quantity": 20,
+      "avg_cost": 350.00,
+      "sector": "Financials"
+    },
+    {
+      "ticker": "NVDA",
+      "quantity": 15,
+      "avg_cost": 450.00,
+      "sector": "Technology"
+    }
+  ],
+  "target_sector_weights": {
+    "Technology": 0.40,
+    "Energy": 0.15,
+    "Financials": 0.15,
+    "Healthcare": 0.10,
+    "Industrials": 0.10,
+    "Consumer Discretionary": 0.10
+  }
+}
