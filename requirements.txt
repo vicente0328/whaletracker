@@ -1,32 +1,8 @@
-# WhaleTracker AI - Dependencies
-# Install with: pip install -r requirements.txt
+# WhaleTracker AI — Dashboard Dependencies
+# Minimal set for Streamlit Cloud deployment
 
-# --- Web Dashboard ---
 streamlit==1.32.0
-
-# --- Data & Analysis ---
 pandas==2.2.1
-numpy==1.26.4
+plotly==5.20.0
 requests==2.31.0
 python-dotenv==1.0.1
-
-# --- SEC / Financial Data ---
-# Financial Modeling Prep API (primary)
-# SEC EDGAR via requests (no extra lib needed)
-
-# --- Slack Integration ---
-slack-bolt==1.18.1
-slack-sdk==3.27.1
-
-# --- Visualization ---
-plotly==5.20.0
-
-# --- Scheduling (for automated alerts) ---
-apscheduler==3.10.4
-
-# --- Caching ---
-diskcache==5.6.3
-
-# --- Testing ---
-pytest==8.1.1
-pytest-mock==3.14.0
