@@ -243,7 +243,12 @@ def _classify_signal(current: dict[str, Any], previous: dict[str, Any] | None) -
 
 
 def _fetch_fmp_13f(cik: str) -> list[dict[str, Any]]:
-    """Try FMP first; fall back to EDGAR if the plan doesn't include 13F."""
+    """Try FMP first; fall back to EDGAR if the plan doesn't include 13F.
+
+    FMP returns a flat list spanning multiple quarters (date field per row).
+    We group by date, take the two most recent quarters, then run
+    detect_signals() for proper QoQ signal classification.
+    """
     if FMP_API_KEY:
         url = (f"https://financialmodelingprep.com/api/v3/form-thirteen-f/{cik}"
                f"?apikey={FMP_API_KEY}")
@@ -254,14 +259,21 @@ def _fetch_fmp_13f(cik: str) -> list[dict[str, Any]]:
             resp.raise_for_status()
             data = resp.json()
             if isinstance(data, list) and data:
-                return _normalize_fmp_holdings(data)
+                return _normalize_fmp_holdings_with_signals(data)
 
     # EDGAR fallback (free, no key required)
     return _fetch_edgar_13f(cik)
 
 
 def _fetch_edgar_13f(cik: str) -> list[dict[str, Any]]:
-    """Fetch 13F-HR holdings directly from SEC EDGAR."""
+    """Fetch the two most recent 13F-HR holdings from SEC EDGAR and compare
+    them quarter-over-quarter to produce accurate signal classifications.
+
+    Without prior-quarter data every position looks like NEW_ENTRY.  This
+    function mirrors the N-PORT approach: collect the latest *two* filings
+    so we can distinguish HOLD / AGGRESSIVE_BUY / HIGH_CONCENTRATION from
+    genuinely new positions.
+    """
     resp = requests.get(
         f"https://data.sec.gov/submissions/CIK{cik}.json",
         headers=_EDGAR_HEADERS, timeout=20,
@@ -273,23 +285,40 @@ def _fetch_edgar_13f(cik: str) -> list[dict[str, Any]]:
     forms    = recent.get("form", [])
     acc_nums = recent.get("accessionNumber", [])
 
+    # Collect the two most recent 13F-HR accession numbers
+    cik_int  = int(cik)
+    acc_list: list[str] = []
     for i, form_type in enumerate(forms):
         if form_type != "13F-HR":
             continue
         acc = acc_nums[i] if i < len(acc_nums) else ""
-        if not acc:
-            continue
+        if acc:
+            acc_list.append(acc)
+        if len(acc_list) >= 2:
+            break
 
-        cik_int   = int(cik)
-        holdings_url = _find_13f_holdings_doc(cik_int, acc)
-        if holdings_url:
-            result = _parse_13f_xml(holdings_url)
-            if result:
-                # No prior-quarter cache available — treat all as NEW_ENTRY
-                return detect_signals(result, [])
-        break   # Only try the most recent 13F-HR
+    if not acc_list:
+        return []
 
-    return []
+    # Parse current quarter (most recent 13F-HR)
+    holdings_url = _find_13f_holdings_doc(cik_int, acc_list[0])
+    if not holdings_url:
+        return []
+    current = _parse_13f_xml(holdings_url)
+    if not current:
+        return []
+
+    # Parse prior quarter for QoQ signal comparison (best-effort)
+    previous: list[dict] = []
+    if len(acc_list) >= 2:
+        try:
+            prev_url = _find_13f_holdings_doc(cik_int, acc_list[1])
+            if prev_url:
+                previous = _parse_13f_xml(prev_url)
+        except Exception as exc:
+            logger.debug("Prior-quarter 13F parse failed for CIK %s: %s", cik, exc)
+
+    return detect_signals(current, previous)
 
 
 def _find_13f_holdings_doc(cik_int: int, acc: str) -> str | None:
@@ -448,14 +477,40 @@ def _resolve_ticker(company_name: str) -> str:
     return ""   # Unknown — skip this holding
 
 
-def _normalize_fmp_holdings(raw: list[dict]) -> list[dict[str, Any]]:
+def _normalize_fmp_holdings(items: list[dict]) -> list[dict[str, Any]]:
+    """Convert a list of same-quarter FMP items to internal holding dicts."""
     return [{
         "ticker":        item.get("symbol", ""),
         "company":       item.get("nameOfIssuer", ""),
         "shares":        item.get("sharesNumber", 0),
         "value_usd":     item.get("marketValue", 0),
         "portfolio_pct": item.get("portfolioPercent", 0.0) / 100,
-    } for item in raw]
+    } for item in items if item.get("symbol")]
+
+
+def _normalize_fmp_holdings_with_signals(raw: list[dict]) -> list[dict[str, Any]]:
+    """Group FMP 13F rows by quarter date, extract current + prior, run detect_signals.
+
+    FMP returns a flat list across all quarters.  Each row has a ``date``
+    field (e.g. "2024-09-30").  We split into current and previous quarter
+    so that HOLD / AGGRESSIVE_BUY / HIGH_CONCENTRATION are computed correctly
+    rather than treating every position as NEW_ENTRY.
+    """
+    # Group rows by date (sorted newest → oldest)
+    from collections import defaultdict
+    by_date: dict[str, list[dict]] = defaultdict(list)
+    for item in raw:
+        date = item.get("date", "")
+        if date:
+            by_date[date].append(item)
+
+    dates = sorted(by_date.keys(), reverse=True)
+    if not dates:
+        return []
+
+    current  = _normalize_fmp_holdings(by_date[dates[0]])
+    previous = _normalize_fmp_holdings(by_date[dates[1]]) if len(dates) >= 2 else []
+    return detect_signals(current, previous)
 
 
 def _load_mock_data() -> dict[str, list[dict[str, Any]]]:
