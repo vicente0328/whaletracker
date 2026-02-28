@@ -1,5 +1,43 @@
 /* ── WhaleTracker AI — Dark Fintech Theme ───────────────────────────────── */
 
+/* ── Ticker autocomplete dropdown (dark theme) ── */
+#h-ticker .Select-control,
+#h-ticker .VirtualizedSelectFocusedOption,
+#h-ticker.is-focused:not(.is-open) > .Select-control {
+    background: #1C2333 !important;
+    border: 1px solid #2E3952 !important;
+    border-radius: 6px !important;
+    color: #E8ECF0 !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    box-shadow: none !important;
+}
+#h-ticker .Select-value-label,
+#h-ticker .Select-placeholder {
+    color: #9BA3B8 !important;
+    font-size: 0.78rem !important;
+    line-height: 28px !important;
+}
+#h-ticker .Select-value-label { color: #E8ECF0 !important; }
+#h-ticker .Select-arrow-zone .Select-arrow { border-top-color: #9BA3B8 !important; }
+#h-ticker .Select-input > input { color: #E8ECF0 !important; font-size: 0.78rem !important; }
+#h-ticker .Select-menu-outer {
+    background: #1C2333 !important;
+    border: 1px solid #2E3952 !important;
+    border-radius: 6px !important;
+    z-index: 9999 !important;
+}
+#h-ticker .Select-option {
+    background: #1C2333 !important;
+    color: #E8ECF0 !important;
+    font-size: 0.78rem !important;
+}
+#h-ticker .Select-option.is-focused,
+#h-ticker .Select-option:hover {
+    background: #2E3952 !important;
+}
+#h-ticker .Select-clear-zone { color: #9BA3B8 !important; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 body {

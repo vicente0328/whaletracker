@@ -29,6 +29,7 @@ from src.portfolio_manager import load_portfolio, suggest_rebalancing, get_curre
 from src.macro_collector import fetch_macro_indicators
 from src.news_collector import fetch_market_news
 import src.firebase_manager as fb
+from src.ticker_list import TICKER_OPTIONS
 
 load_dotenv()
 DATA_MODE = os.getenv("DATA_MODE", "mock")
@@ -796,13 +797,14 @@ def build_portfolio_tab(auth_data=None):
 
             # Add holding form
             html.Div([
-                dcc.Input(id="h-ticker", type="text", placeholder="Ticker (e.g. AAPL)",
-                          debounce=False, className="watchlist-input", style={
-                    "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
-                    "borderRadius": "6px", "color": f"#{C['text']}",
-                    "padding": "5px 10px", "fontSize": "0.78rem",
-                    "outline": "none", "width": "130px",
-                }),
+                dcc.Dropdown(
+                    id="h-ticker",
+                    options=TICKER_OPTIONS,
+                    searchable=True,
+                    clearable=True,
+                    placeholder="Search ticker…",
+                    style={"width": "200px", "fontSize": "0.78rem"},
+                ),
                 dcc.Input(id="h-qty", type="number", placeholder="Qty",
                           debounce=False, min=1, className="watchlist-input", style={
                     "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
@@ -2499,7 +2501,7 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
             if sector:
                 h["sector"] = sector
             current["holdings"] = holdings
-            return current, "", None, None
+            return current, None, None, None
 
     holdings.append({
         "ticker":   ticker,
@@ -2508,7 +2510,7 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
         "sector":   sector or "Other",
     })
     current["holdings"] = holdings
-    return current, "", None, None
+    return current, None, None, None
 
 
 @app.callback(
