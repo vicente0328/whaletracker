@@ -77,6 +77,22 @@ _SERIES: dict[str, dict] = {
         "color": "#00D09C",
         "desc":  "Annualised real GDP growth rate — the broadest economic health signal.",
     },
+    "mfg_pmi": {
+        "id":    "NAPM",
+        "name":  "ISM Mfg PMI",
+        "unit":  "",
+        "color": "#F97316",
+        "desc":  "ISM Manufacturing PMI — monthly survey of purchasing managers. Above 50 = expansion, below 50 = contraction.",
+        "pmi":   True,   # mark for special 50-line rendering
+    },
+    "svc_pmi": {
+        "id":    "NMFCI",
+        "name":  "ISM Services PMI",
+        "unit":  "",
+        "color": "#06B6D4",
+        "desc":  "ISM Non-Manufacturing (Services) PMI — covers ~80% of US GDP. Above 50 = expansion, below 50 = contraction.",
+        "pmi":   True,
+    },
 }
 
 # ── Module-level cache ─────────────────────────────────────────────────────────
@@ -162,6 +178,7 @@ def _fetch_from_fred() -> dict[str, dict]:
                 "unit":         meta["unit"],
                 "color":        meta["color"],
                 "desc":         meta.get("desc", ""),
+                "pmi":          meta.get("pmi", False),
                 "current":      round(current, 2),
                 "prev":         round(prev, 2),
                 "change_1y":    round(current - prev, 2),
@@ -255,16 +272,30 @@ def _mock_macro() -> dict[str, dict]:
             "unit":         m["unit"],
             "color":        m["color"],
             "desc":         m.get("desc", ""),
+            "pmi":          m.get("pmi", False),
             "current":      current,
             "prev":         prev,
             "change_1y":    round(current - prev, 2),
             "observations": use_obs,
         }
 
+    # PMI — manufacturing mostly below 50 (contraction) in 2023-24, services resilient
+    mfg_pmi_vals = [
+        49.3, 49.1, 48.7, 47.8, 47.6, 47.8, 48.5, 49.2,
+        46.7, 46.4, 47.1, 48.4, 49.0, 49.2, 50.3, 51.2,
+        52.8, 53.0, 52.6, 51.4, 50.9, 48.3, 47.4, 46.9,
+    ]
+    svc_pmi_vals = [
+        54.1, 53.5, 52.8, 53.3, 54.9, 55.1, 53.8, 52.7,
+        51.4, 51.6, 52.0, 53.4, 54.5, 54.9, 56.7, 57.2,
+        55.3, 52.7, 52.9, 53.4, 54.5, 55.1, 56.4, 55.2,
+    ]
     return {
-        "fed_rate":    _build("fed_rate",    fed_vals,   []),
-        "cpi":         _build("cpi",         cpi_vals,   []),
-        "yield_10y":   _build("yield_10y",   yield_vals, []),
-        "unemployment":_build("unemployment",unemp_vals, []),
-        "gdp_growth":  _build("gdp_growth",  [],         gdp_obs),
+        "fed_rate":    _build("fed_rate",    fed_vals,     []),
+        "cpi":         _build("cpi",         cpi_vals,     []),
+        "yield_10y":   _build("yield_10y",   yield_vals,   []),
+        "unemployment":_build("unemployment",unemp_vals,   []),
+        "gdp_growth":  _build("gdp_growth",  [],           gdp_obs),
+        "mfg_pmi":     _build("mfg_pmi",     mfg_pmi_vals, []),
+        "svc_pmi":     _build("svc_pmi",     svc_pmi_vals, []),
     }

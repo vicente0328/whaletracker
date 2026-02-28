@@ -541,7 +541,8 @@ def build_macro_tab():
     """📈 Macro Dashboard — FRED economic indicators."""
     macro_data = fetch_macro_indicators()   # uses 24h cache after first call
     # ── KPI cards row ──────────────────────────────────────────────────────────
-    kpi_order = ["fed_rate", "yield_10y", "cpi", "unemployment", "gdp_growth"]
+    kpi_order = ["fed_rate", "yield_10y", "cpi", "unemployment", "gdp_growth",
+                 "mfg_pmi", "svc_pmi"]
     kpi_cards = []
     for key in kpi_order:
         m = macro_data.get(key, {})
@@ -550,9 +551,22 @@ def build_macro_tab():
         cur  = m["current"]
         chg  = m["change_1y"]
         col  = m["color"]
-        arrow = ("↑" if chg > 0 else "↓") if chg != 0 else "→"
-        chg_color = (f"#{C['red']}" if chg > 0 and key in ("fed_rate", "cpi", "yield_10y", "unemployment")
-                     else f"#{C['green']}" if chg > 0 else f"#{C['red']}")
+        is_pmi = m.get("pmi", False)
+        if is_pmi:
+            # PMI: badge shows expansion vs contraction relative to 50
+            expanding = cur >= 50
+            badge_color = f"#{C['green']}" if expanding else f"#{C['red']}"
+            badge_text  = f"{'▲' if expanding else '▼'} {'Expanding' if expanding else 'Contracting'} ({cur:.1f})"
+            sub_elem = html.Span(badge_text, style={"color": badge_color,
+                                                     "fontWeight": "600", "fontSize": "0.72rem"})
+        else:
+            arrow = ("↑" if chg > 0 else "↓") if chg != 0 else "→"
+            chg_color = (f"#{C['red']}" if chg > 0 and key in ("fed_rate", "cpi", "yield_10y", "unemployment")
+                         else f"#{C['green']}" if chg > 0 else f"#{C['red']}")
+            sub_elem = html.Span(f"{arrow} {abs(chg):.2f}pp vs 1Y ago",
+                                 style={"color": chg_color, "fontWeight": "600",
+                                        "fontSize": "0.72rem"})
+        val_str = f"{cur:.1f}" if is_pmi else f"{cur:.2f}{m['unit']}"
         kpi_cards.append(html.Div([
             html.Div("◈", style={
                 "position": "absolute", "right": "12px", "top": "50%",
@@ -560,12 +574,8 @@ def build_macro_tab():
                 "opacity": "0.04", "color": col, "fontWeight": "900",
             }),
             html.Div(m["name"], className="kpi-label"),
-            html.Div(f"{cur:.2f}{m['unit']}", className="kpi-value"),
-            html.Div([
-                html.Span(f"{arrow} {abs(chg):.2f}pp vs 1Y ago",
-                          style={"color": chg_color, "fontWeight": "600",
-                                 "fontSize": "0.72rem"}),
-            ], className="kpi-sub"),
+            html.Div(val_str, className="kpi-value"),
+            html.Div([sub_elem], className="kpi-sub"),
         ], className="kpi-card", style={"borderLeft": f"3px solid {col}"}))
 
     kpi_row = html.Div(kpi_cards, className="kpi-strip", style={"marginBottom": "1rem"})
@@ -642,6 +652,49 @@ def build_macro_tab():
         chart_rows.append(dcc.Graph(figure=fig_gdp, config={"displayModeBar": False},
                                     style={"marginBottom": "1rem"}))
 
+    # PMI charts side-by-side with 50 expansion/contraction line
+    pmi_charts = []
+    for key in ("mfg_pmi", "svc_pmi"):
+        m = macro_data.get(key, {})
+        if not m:
+            continue
+        obs    = list(reversed(m.get("observations", [])))
+        dates  = [o["date"] for o in obs]
+        values = [o["value"] for o in obs]
+        col    = m["color"]
+        r2, g2, b2 = int(col[1:3], 16), int(col[3:5], 16), int(col[5:7], 16)
+        fill_rgba = f"rgba({r2},{g2},{b2},0.07)"
+        fig_pmi = go.Figure(go.Scatter(
+            x=dates, y=values,
+            mode="lines",
+            line=dict(color=col, width=2),
+            fill="tozeroy", fillcolor=fill_rgba,
+            hovertemplate="<b>%{x}</b><br>PMI: %{y:.1f}<extra></extra>",
+        ))
+        fig_pmi.add_hline(
+            y=50,
+            line=dict(color="rgba(255,255,255,0.25)", width=1, dash="dot"),
+            annotation_text="50 = neutral",
+            annotation_font=dict(size=9, color="rgba(255,255,255,0.4)"),
+            annotation_position="top right",
+        )
+        fig_pmi.update_layout(**plotly_base(
+            height=200,
+            title=dict(text=m["name"],
+                       font=dict(size=11, color=f"#{C['muted']}"),
+                       x=0, xanchor="left"),
+            xaxis=dict(showgrid=False, tickfont=dict(size=9), tickangle=-30, nticks=8),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)",
+                       tickfont=dict(size=10), range=[40, 65], zeroline=False),
+            margin=dict(l=0, r=0, t=36, b=40),
+        ))
+        pmi_charts.append(dcc.Graph(figure=fig_pmi, config={"displayModeBar": False},
+                                    style={"flex": "1"}))
+    if pmi_charts:
+        chart_rows.append(html.Div(pmi_charts, style={
+            "display": "flex", "gap": "1rem", "marginBottom": "1rem",
+        }))
+
     # ── Whale context note ──────────────────────────────────────────────────────
     fed  = macro_data.get("fed_rate", {}).get("current", 0)
     y10  = macro_data.get("yield_10y", {}).get("current", 0)
@@ -660,6 +713,16 @@ def build_macro_tab():
         context_lines.append("⚠️  Inverted yield curve (10Y < Fed rate) — historically precedes economic slowdowns.")
     elif spread > 1.5:
         context_lines.append("✅  Positive yield curve spread — credit markets signalling expansion expectations.")
+    mfg_pmi_cur = macro_data.get("mfg_pmi", {}).get("current", 50)
+    svc_pmi_cur = macro_data.get("svc_pmi", {}).get("current", 50)
+    if mfg_pmi_cur < 48:
+        context_lines.append("⚠️  Manufacturing PMI below 48 — factory sector contracting; watch industrials & materials.")
+    elif mfg_pmi_cur > 52:
+        context_lines.append("✅  Manufacturing PMI above 52 — factory sector expanding; industrials often outperform.")
+    if svc_pmi_cur < 50:
+        context_lines.append("⚠️  Services PMI in contraction — broad economic slowdown risk; consider defensive positioning.")
+    elif svc_pmi_cur > 54:
+        context_lines.append("✅  Services PMI strong — consumer spending resilient; tech and discretionary may benefit.")
     if not context_lines:
         context_lines.append("📊  Macro conditions are neutral — monitor for shifts in key indicators.")
 
@@ -676,7 +739,107 @@ def build_macro_tab():
         "borderLeft": f"3px solid #{C['blue']}",
     })
 
-    return html.Div([kpi_row] + chart_rows + [context_card])
+    # ── Indicator Guide ─────────────────────────────────────────────────────────
+    guide_items = [
+        {
+            "key":   "fed_rate",
+            "icon":  "🏦",
+            "title": "Fed Funds Rate",
+            "what":  "The overnight lending rate set by the Federal Reserve at FOMC meetings (8× per year).",
+            "how":   "High rates → expensive debt → pressure on growth stocks & real estate. Low rates → cheap capital → risk-on rally. Markets price future hikes/cuts via Fed Funds futures.",
+            "level": "Neutral: 2–3% | Restrictive: >4% | Accommodative: <1%",
+        },
+        {
+            "key":   "cpi",
+            "icon":  "🛒",
+            "title": "CPI (YoY %)",
+            "what":  "Consumer Price Index — measures the average change in prices paid by consumers for goods and services.",
+            "how":   "High CPI forces the Fed to hike rates (bearish equities, especially growth). CPI near 2% = Fed target. Watch core CPI (ex-food & energy) for the underlying trend.",
+            "level": "Target: ~2% | Elevated: >3% | Hot: >5%",
+        },
+        {
+            "key":   "yield_10y",
+            "icon":  "📉",
+            "title": "10-Year Treasury Yield",
+            "what":  "The yield on 10-year US government bonds — the global risk-free benchmark rate.",
+            "how":   "Rising yields = higher discount rate → lowers present value of future earnings → pressure on growth/tech. Also watch the 10Y–2Y spread: inversion historically precedes recessions.",
+            "level": "Low: <2% | Normal: 3–4% | Elevated: >4.5%",
+        },
+        {
+            "key":   "unemployment",
+            "icon":  "👷",
+            "title": "Unemployment Rate",
+            "what":  "Percentage of the labor force actively seeking work. Part of the Fed's dual mandate (max employment + price stability).",
+            "how":   "Low unemployment → strong consumer → pro-growth. But too low → wage inflation → Fed hikes. Rising unemployment → Fed may cut rates (easing = market bullish).",
+            "level": "Full employment: ~4% | Elevated: >5.5% | Recession territory: >7%",
+        },
+        {
+            "key":   "gdp_growth",
+            "icon":  "📊",
+            "title": "Real GDP Growth (QoQ)",
+            "what":  "Annualised quarter-over-quarter growth in inflation-adjusted US Gross Domestic Product.",
+            "how":   "Two consecutive negative quarters = technical recession. Strong GDP → earnings growth → equity bullish. Negative GDP surprises trigger sector rotation to defensives.",
+            "level": "Recession: <0% | Slow: 0–2% | Healthy: 2–3% | Hot: >4%",
+        },
+        {
+            "key":   "mfg_pmi",
+            "icon":  "🏭",
+            "title": "ISM Manufacturing PMI",
+            "what":  "Monthly survey of purchasing managers at ~400 manufacturers. A diffusion index where >50 = expansion and <50 = contraction.",
+            "how":   "Leading indicator — turns before GDP. Collapse below 45 often signals recession. Strong PMI → bullish for industrials, materials, energy. Sub-components: New Orders (most forward-looking), Employment, Prices Paid.",
+            "level": "Contraction: <50 | Neutral: 50 | Expansion: >50 | Strong: >55",
+        },
+        {
+            "key":   "svc_pmi",
+            "icon":  "🛎️",
+            "title": "ISM Services PMI",
+            "what":  "Monthly survey covering ~90% of US GDP (services economy). Same diffusion index methodology as Manufacturing PMI.",
+            "how":   "Services are more resilient than manufacturing. A drop below 50 is a serious recession warning. Strong services PMI supports consumer discretionary, financials, and tech.",
+            "level": "Contraction: <50 | Neutral: 50 | Expansion: >50 | Strong: >55",
+        },
+    ]
+
+    guide_cards = []
+    for item in guide_items:
+        m = macro_data.get(item["key"], {})
+        col = m.get("color", f"#{C['blue']}") if m else f"#{C['blue']}"
+        guide_cards.append(html.Div([
+            html.Div([
+                html.Span(item["icon"], style={"fontSize": "1.1rem", "marginRight": "7px"}),
+                html.Span(item["title"], style={
+                    "fontSize": "0.8rem", "fontWeight": "700", "color": col,
+                }),
+            ], style={"marginBottom": "6px", "display": "flex", "alignItems": "center"}),
+            html.P(item["what"], style={
+                "fontSize": "0.72rem", "color": f"#{C['text']}", "margin": "0 0 5px 0",
+                "lineHeight": "1.5",
+            }),
+            html.P(item["how"], style={
+                "fontSize": "0.70rem", "color": f"#{C['muted']}", "margin": "0 0 5px 0",
+                "lineHeight": "1.5",
+            }),
+            html.Div(item["level"], style={
+                "fontSize": "0.65rem", "color": col, "opacity": "0.8",
+                "fontFamily": "monospace", "marginTop": "4px",
+            }),
+        ], style={
+            "background": f"#{C['card2']}", "borderRadius": "10px",
+            "padding": "12px 14px", "border": f"1px solid #{C['border']}",
+            "borderTop": f"2px solid {col}",
+        }))
+
+    guide_section = html.Div([
+        html.Div("📖  Indicator Guide",
+                 className="section-title",
+                 style={"marginBottom": "0.8rem", "marginTop": "0.5rem"}),
+        html.Div(guide_cards, style={
+            "display": "grid",
+            "gridTemplateColumns": "repeat(auto-fill, minmax(280px, 1fr))",
+            "gap": "0.8rem",
+        }),
+    ])
+
+    return html.Div([kpi_row] + chart_rows + [context_card, guide_section])
 
 
 def build_news_banner(news_list: list) -> html.Div:
