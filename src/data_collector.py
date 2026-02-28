@@ -285,7 +285,8 @@ def _fetch_edgar_13f(cik: str) -> list[dict[str, Any]]:
         if holdings_url:
             result = _parse_13f_xml(holdings_url)
             if result:
-                return result
+                # No prior-quarter cache available — treat all as NEW_ENTRY
+                return detect_signals(result, [])
         break   # Only try the most recent 13F-HR
 
     return []
@@ -316,25 +317,51 @@ def _find_13f_holdings_doc(cik_int: int, acc: str) -> str | None:
     return None
 
 
+def _strip_namespaces(text: str) -> str:
+    """Remove all XML namespace declarations and namespace-prefixed attributes/tags."""
+    # Remove xmlns declarations (both default and prefixed)
+    text = re.sub(r'\s+xmlns(?::[^=]+)?="[^"]*"', "", text)
+    # Remove namespace-prefixed attributes (e.g. xsi:schemaLocation="...")
+    text = re.sub(r'\s+[a-zA-Z][\w]*:[a-zA-Z][\w]*="[^"]*"', "", text)
+    # Strip namespace prefixes from opening and closing tags
+    text = re.sub(r"<([a-zA-Z][\w]*:)",  "<",  text)
+    text = re.sub(r"</([a-zA-Z][\w]*:)", "</", text)
+    return text
+
+
+def _parse_xml_root(content_bytes: bytes, content_text: str):
+    """Parse XML bytes, falling back to namespace-stripping on failure."""
+    # Pass 1: parse as-is (ET handles declared namespaces natively)
+    try:
+        return ET.fromstring(content_bytes)
+    except ET.ParseError:
+        pass
+    # Pass 2: strip all namespace constructs, then re-parse
+    try:
+        return ET.fromstring(_strip_namespaces(content_text).encode("utf-8"))
+    except ET.ParseError:
+        pass
+    return None
+
+
 def _parse_13f_xml(xml_url: str) -> list[dict[str, Any]]:
     """Download and parse a 13F-HR holdings XML into our internal schema."""
     resp = requests.get(xml_url, headers=_EDGAR_HEADERS, timeout=30)
     resp.raise_for_status()
-    content = resp.text
 
-    # Strip XML namespaces for simple tag access
-    content = re.sub(r'\s+xmlns(?::[^=]+)?="[^"]*"', "", content)
-    content = re.sub(r"<([a-zA-Z]+:)",  "<",  content)
-    content = re.sub(r"</([a-zA-Z]+:)", "</", content)
+    root = _parse_xml_root(resp.content, resp.text)
+    if root is None:
+        logger.warning("13F XML unparseable: %s", xml_url)
+        return []
 
-    root        = ET.fromstring(content)
     raw_entries = []
     total_value = 0
 
-    for info in root.iter("infoTable"):
-        name_el   = info.find("nameOfIssuer")
-        value_el  = info.find("value")           # USD thousands
-        shares_el = info.find(".//sshPrnamt")
+    # {*}tag matches any namespace (Python 3.8+ ElementTree wildcard)
+    for info in root.iter("{*}infoTable"):
+        name_el   = info.find("{*}nameOfIssuer")
+        value_el  = info.find("{*}value")           # USD thousands
+        shares_el = info.find(".//{*}sshPrnamt")
 
         if name_el is None or value_el is None:
             continue
@@ -703,27 +730,24 @@ def _parse_nport_xml(cik: str, filing: dict) -> list[dict[str, Any]]:
     try:
         resp = requests.get(url, headers=_EDGAR_HEADERS, timeout=45)
         resp.raise_for_status()
-        content = resp.text
 
-        # Strip XML namespaces so ElementTree can use simple tag names
-        content = re.sub(r'\s+xmlns(?::[^=]+)?="[^"]*"', "", content)
-        content = re.sub(r"<([a-zA-Z]+:)",  "<",  content)
-        content = re.sub(r"</([a-zA-Z]+:)", "</", content)
-
-        root = ET.fromstring(content)
+        root = _parse_xml_root(resp.content, resp.text)
+        if root is None:
+            logger.warning("N-PORT XML unparseable: %s", url)
+            return []
 
         holdings: list[dict] = []
-        for sec in root.iter("invstOrSec"):
+        for sec in root.iter("{*}invstOrSec"):
             # Ticker: lives in <identifiers><ticker> or direct <ticker>
-            ticker_el = sec.find(".//ticker") or sec.find("ticker")
+            ticker_el = sec.find(".//{*}ticker") or sec.find("{*}ticker")
             if ticker_el is None or not (ticker_el.text or "").strip():
                 continue
             ticker = ticker_el.text.strip().upper()
 
-            name_el    = sec.find("name")
-            balance_el = sec.find("balance")
-            val_el     = sec.find("valUSD")
-            pct_el     = sec.find("pctVal")
+            name_el    = sec.find("{*}name")
+            balance_el = sec.find("{*}balance")
+            val_el     = sec.find("{*}valUSD")
+            pct_el     = sec.find("{*}pctVal")
 
             try:
                 shares      = int(float(balance_el.text)) if balance_el is not None else 0
