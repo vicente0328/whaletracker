@@ -5,10 +5,11 @@ Run locally:  python app.py
 Production:   gunicorn app:server --bind 0.0.0.0:$PORT
 """
 
+import json
 import os
 from datetime import datetime
 
-from dash import Dash, html, dcc, Input, Output, State, ctx
+from dash import Dash, html, dcc, Input, Output, State, ctx, ALL, no_update
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
@@ -27,6 +28,7 @@ from src.analysis_engine import (
 from src.portfolio_manager import load_portfolio, suggest_rebalancing, get_current_sector_weights
 from src.macro_collector import fetch_macro_indicators
 from src.news_collector import fetch_market_news
+import src.firebase_manager as fb
 
 load_dotenv()
 DATA_MODE = os.getenv("DATA_MODE", "mock")
@@ -740,7 +742,125 @@ def build_news_banner(news_list: list) -> html.Div:
     })
 
 
-def build_portfolio_tab():
+_SECTORS = [
+    "Technology", "Healthcare", "Financials", "Consumer Discretionary",
+    "Consumer Staples", "Industrials", "Energy", "Materials",
+    "Utilities", "Real Estate", "Communication Services",
+]
+
+
+def build_portfolio_tab(auth_data=None):
+    """Portfolio tab — editor section (auth-aware) + static analysis charts."""
+
+    # ── Auth / Editor section ────────────────────────────────────────────────
+    if not fb.is_configured():
+        editor_section = html.Div()  # Firebase not set up — no editor
+    elif not auth_data:
+        editor_section = html.Div([
+            html.Span("🔑", style={"fontSize": "1.2rem", "marginRight": "8px"}),
+            html.Span("Login to sync your portfolio to the cloud and edit it directly here.",
+                      style={"fontSize": "0.82rem", "color": f"#{C['muted']}"}),
+            html.Span(" → Use the ", style={"fontSize": "0.82rem", "color": f"#{C['muted']}"}),
+            html.Span("🔑 Login", style={"fontSize": "0.82rem", "fontWeight": "700",
+                                          "color": f"#{C['amber']}"}),
+            html.Span(" button in the top-right corner.",
+                      style={"fontSize": "0.82rem", "color": f"#{C['muted']}"}),
+        ], style={
+            "background": f"#{C['card']}", "borderRadius": "10px",
+            "padding": "12px 18px", "marginBottom": "1.2rem",
+            "border": f"1px solid #{C['amber']}33",
+            "display": "flex", "alignItems": "center", "flexWrap": "wrap", "gap": "2px",
+        })
+    else:
+        email = auth_data.get("email", "")
+        editor_section = html.Div([
+            # Auth status bar
+            html.Div([
+                html.Span("☁️", style={"marginRight": "6px"}),
+                html.Span(f"Signed in as {email}",
+                          style={"fontSize": "0.8rem", "color": f"#{C['muted']}"}),
+                html.Button("Logout", id="logout-btn", n_clicks=0, style={
+                    "marginLeft": "auto", "background": "transparent",
+                    "border": f"1px solid #{C['border']}", "borderRadius": "5px",
+                    "color": f"#{C['muted']}", "padding": "2px 10px",
+                    "fontSize": "0.72rem", "cursor": "pointer",
+                }),
+            ], style={
+                "display": "flex", "alignItems": "center",
+                "marginBottom": "1rem", "gap": "6px",
+            }),
+
+            html.Div("☁️ Cloud Portfolio Editor", className="section-title",
+                     style={"marginBottom": "0.8rem"}),
+
+            # Add holding form
+            html.Div([
+                dcc.Input(id="h-ticker", type="text", placeholder="Ticker (e.g. AAPL)",
+                          debounce=False, className="watchlist-input", style={
+                    "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
+                    "borderRadius": "6px", "color": f"#{C['text']}",
+                    "padding": "5px 10px", "fontSize": "0.78rem",
+                    "outline": "none", "width": "130px",
+                }),
+                dcc.Input(id="h-qty", type="number", placeholder="Qty",
+                          debounce=False, min=1, className="watchlist-input", style={
+                    "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
+                    "borderRadius": "6px", "color": f"#{C['text']}",
+                    "padding": "5px 10px", "fontSize": "0.78rem",
+                    "outline": "none", "width": "80px",
+                }),
+                dcc.Input(id="h-cost", type="number", placeholder="Avg Cost",
+                          debounce=False, min=0, step=0.01, className="watchlist-input", style={
+                    "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
+                    "borderRadius": "6px", "color": f"#{C['text']}",
+                    "padding": "5px 10px", "fontSize": "0.78rem",
+                    "outline": "none", "width": "110px",
+                }),
+                dcc.Dropdown(id="h-sector", options=[{"label": s, "value": s} for s in _SECTORS],
+                             placeholder="Sector", clearable=False,
+                             style={
+                                 "width": "190px", "fontSize": "0.78rem",
+                                 "background": f"#{C['card2']}", "color": "#000",
+                             }),
+                html.Button("＋ Add", id="holding-add-btn", n_clicks=0, style={
+                    "background": f"#{C['green']}22", "color": f"#{C['green']}",
+                    "border": f"1px solid #{C['green']}44", "borderRadius": "6px",
+                    "padding": "5px 14px", "fontSize": "0.75rem", "fontWeight": "700",
+                    "cursor": "pointer", "whiteSpace": "nowrap",
+                }),
+            ], style={
+                "display": "flex", "gap": "8px", "flexWrap": "wrap",
+                "alignItems": "center", "marginBottom": "1rem",
+            }),
+
+            # Holdings table (dynamic — filled by callback)
+            html.Div(id="portfolio-editor-holdings", style={"marginBottom": "1rem"}),
+
+            # Save / status bar
+            html.Div([
+                html.Button("💾 Save to Cloud", id="portfolio-save-btn", n_clicks=0, style={
+                    "background": f"#{C['blue']}22", "color": f"#{C['blue']}",
+                    "border": f"1px solid #{C['blue']}44", "borderRadius": "6px",
+                    "padding": "6px 16px", "fontSize": "0.78rem", "fontWeight": "700",
+                    "cursor": "pointer",
+                }),
+                html.Span(id="portfolio-save-status", style={"fontSize": "0.78rem"}),
+            ], style={"display": "flex", "alignItems": "center", "gap": "12px"}),
+
+        ], style={
+            "background": f"#{C['card']}", "borderRadius": "10px",
+            "padding": "16px 20px", "marginBottom": "1.4rem",
+            "border": f"1px solid #{C['border']}",
+        })
+
+    return html.Div([
+        editor_section,
+        _build_portfolio_analysis(),
+    ])
+
+
+def _build_portfolio_analysis():
+    """The existing portfolio charts and rebalancing analysis (reads global data)."""
     holdings_list  = portfolio.get("holdings", [])
     target_weights = portfolio.get("target_sector_weights", {})
     top_sector     = max(current_weights, key=current_weights.get) if current_weights else "—"
@@ -1805,6 +1925,68 @@ def build_beginner_guide(lang: str) -> html.Div:
     )
 
 
+def build_auth_modal():
+    """Login / Register modal."""
+    inp_style = {
+        "width": "100%", "boxSizing": "border-box",
+        "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
+        "borderRadius": "7px", "color": f"#{C['text']}",
+        "padding": "8px 12px", "fontSize": "0.85rem", "outline": "none",
+    }
+    return html.Div([
+        html.Div([
+            html.Div([
+                html.Div("🔑 Account", className="modal-title"),
+                html.Button("✕", id="auth-modal-close", className="modal-close", n_clicks=0),
+            ], className="modal-header"),
+
+            # Login / Register tabs
+            dcc.Tabs(id="auth-mode", value="login", className="lang-tabs", children=[
+                dcc.Tab(label="Login",    value="login",
+                        className="lang-tab", selected_className="lang-tab-active"),
+                dcc.Tab(label="Register", value="register",
+                        className="lang-tab", selected_className="lang-tab-active"),
+            ]),
+
+            html.Div([
+                html.Div("Email", style={"fontSize": "0.75rem", "color": f"#{C['muted']}",
+                                         "marginBottom": "4px", "marginTop": "16px"}),
+                dcc.Input(id="auth-email", type="email", placeholder="you@example.com",
+                          debounce=False, style=inp_style),
+
+                html.Div("Password", style={"fontSize": "0.75rem", "color": f"#{C['muted']}",
+                                             "marginBottom": "4px", "marginTop": "12px"}),
+                dcc.Input(id="auth-password", type="password", placeholder="Password",
+                          debounce=False, style=inp_style),
+
+                # Confirm password (Register only)
+                html.Div(id="auth-confirm-wrap", children=[
+                    html.Div("Confirm Password",
+                             style={"fontSize": "0.75rem", "color": f"#{C['muted']}",
+                                    "marginBottom": "4px", "marginTop": "12px"}),
+                    dcc.Input(id="auth-confirm", type="password",
+                              placeholder="Repeat password",
+                              debounce=False, style=inp_style),
+                ], style={"display": "none"}),
+
+                html.Div(id="auth-error-msg", style={
+                    "color": f"#{C['red']}", "fontSize": "0.8rem",
+                    "marginTop": "10px", "minHeight": "18px",
+                }),
+
+                html.Button(id="auth-submit-btn", n_clicks=0, children="Login", style={
+                    "marginTop": "14px", "width": "100%",
+                    "background": f"#{C['blue']}", "color": "#fff",
+                    "border": "none", "borderRadius": "8px",
+                    "padding": "10px", "fontSize": "0.9rem", "fontWeight": "700",
+                    "cursor": "pointer",
+                }),
+            ], style={"padding": "0 4px 20px"}),
+
+        ], className="modal-box", style={"maxWidth": "380px"}),
+    ], id="auth-modal", className="modal-overlay", style={"display": "none"})
+
+
 def build_modal():
     return html.Div([
         html.Div([
@@ -1855,8 +2037,10 @@ server = app.server  # Gunicorn entry point
 # ── LAYOUT ─────────────────────────────────────────────────────────────────────
 app.layout = html.Div([
 
-    # Watchlist persistent store (localStorage)
-    dcc.Store(id="watchlist-store", storage_type="local", data=[]),
+    # Persistent stores
+    dcc.Store(id="watchlist-store",       storage_type="local",   data=[]),
+    dcc.Store(id="auth-store",            storage_type="session", data=None),
+    dcc.Store(id="portfolio-edit-store",  storage_type="session", data=portfolio),
 
     # Header
     html.Div([
@@ -1873,6 +2057,7 @@ app.layout = html.Div([
                       style={"background": f"#{mode_color}18", "color": f"#{mode_color}",
                              "border": f"1px solid #{mode_color}44"}),
             html.Span(timestamp, className="timestamp"),
+            html.Div(id="auth-header-section"),
             html.Button("📖 Guide", id="guide-btn", className="guide-btn", n_clicks=0),
         ], className="header-right"),
     ], className="header"),
@@ -1905,12 +2090,19 @@ app.layout = html.Div([
     # Guide Modal
     build_modal(),
 
+    # Auth Modal
+    build_auth_modal(),
+
 ], className="app-shell")
 
 
 # ── CALLBACKS ──────────────────────────────────────────────────────────────────
-@app.callback(Output("tab-content", "children"), Input("main-tabs", "value"))
-def render_tab(tab: str):
+@app.callback(
+    Output("tab-content", "children"),
+    Input("main-tabs", "value"),
+    Input("auth-store", "data"),
+)
+def render_tab(tab: str, auth_data):
     if tab == "tab-whales":
         return build_whale_tab()
     if tab == "tab-recs":
@@ -1971,7 +2163,7 @@ def render_tab(tab: str):
             html.Div(id="rec-cards", children=build_rec_cards("ALL")),
         ])
     if tab == "tab-port":
-        return build_portfolio_tab()
+        return build_portfolio_tab(auth_data)
     if tab == "tab-macro":
         return build_macro_tab()
 
@@ -2055,6 +2247,281 @@ def render_guide(lang: str, mode: str):
     if mode == "beginner":
         return build_beginner_guide(lang)
     return build_guide(lang)
+
+
+# ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("auth-header-section", "children"),
+    Input("auth-store", "data"),
+)
+def update_auth_header(auth_data):
+    """Show Login button or user email in the header."""
+    if not fb.is_configured():
+        return html.Div()  # Firebase not configured — hide auth entirely
+
+    if auth_data:
+        email = auth_data.get("email", "")
+        short = email.split("@")[0][:12]
+        return html.Span(f"👤 {short}", style={
+            "fontSize": "0.75rem", "color": f"#{C['muted']}",
+            "background": f"#{C['card2']}", "borderRadius": "6px",
+            "padding": "4px 10px", "border": f"1px solid #{C['border']}",
+            "cursor": "default",
+        })
+    else:
+        return html.Button("🔑 Login", id="auth-open-btn", n_clicks=0,
+                           className="guide-btn")
+
+
+@app.callback(
+    Output("auth-modal", "style"),
+    Input("auth-open-btn",    "n_clicks"),
+    Input("auth-modal-close", "n_clicks"),
+    State("auth-store",       "data"),
+    prevent_initial_call=True,
+)
+def toggle_auth_modal(open_clicks, close_clicks, auth_data):
+    if auth_data:
+        return {"display": "none"}  # Already logged in — don't show
+    return {"display": "flex"} if ctx.triggered_id == "auth-open-btn" else {"display": "none"}
+
+
+@app.callback(
+    Output("auth-confirm-wrap", "style"),
+    Output("auth-submit-btn",   "children"),
+    Input("auth-mode",          "value"),
+)
+def update_auth_form(mode):
+    if mode == "register":
+        return {"display": "block"}, "Create Account"
+    return {"display": "none"}, "Login"
+
+
+@app.callback(
+    Output("auth-store",           "data"),
+    Output("auth-error-msg",       "children"),
+    Output("auth-modal",           "style", allow_duplicate=True),
+    Output("portfolio-edit-store", "data",  allow_duplicate=True),
+    Input("auth-submit-btn",       "n_clicks"),
+    State("auth-mode",             "value"),
+    State("auth-email",            "value"),
+    State("auth-password",         "value"),
+    State("auth-confirm",          "value"),
+    State("auth-store",            "data"),
+    prevent_initial_call=True,
+)
+def handle_auth_submit(n_clicks, mode, email, password, confirm, current_auth):
+    if not n_clicks:
+        return no_update, no_update, no_update, no_update
+
+    email    = (email    or "").strip()
+    password = (password or "")
+    confirm  = (confirm  or "")
+
+    if not email or not password:
+        return no_update, "Email and password are required.", no_update, no_update
+
+    try:
+        if mode == "register":
+            if password != confirm:
+                return no_update, "Passwords do not match.", no_update, no_update
+            user = fb.register_user(email, password)
+        else:
+            user = fb.login_user(email, password)
+    except fb.FirebaseError as exc:
+        return no_update, str(exc), no_update, no_update
+
+    # Load cloud portfolio (if any) for this user
+    cloud_portfolio = fb.get_portfolio(user["uid"], user["idToken"])
+    edit_store_data = cloud_portfolio if cloud_portfolio else portfolio  # fall back to file
+
+    return user, "", {"display": "none"}, edit_store_data
+
+
+@app.callback(
+    Output("auth-store",           "data",  allow_duplicate=True),
+    Output("portfolio-edit-store", "data",  allow_duplicate=True),
+    Input("logout-btn",            "n_clicks"),
+    prevent_initial_call=True,
+)
+def handle_logout(n_clicks):
+    if not n_clicks:
+        return no_update, no_update
+    return None, portfolio  # clear auth; reset edit store to file-based portfolio
+
+
+# ── PORTFOLIO EDITOR CALLBACKS ─────────────────────────────────────────────────
+
+@app.callback(
+    Output("portfolio-editor-holdings", "children"),
+    Input("portfolio-edit-store", "data"),
+)
+def render_editor_holdings(store_data):
+    """Render the editable holdings table from the portfolio-edit-store."""
+    holdings = (store_data or {}).get("holdings", [])
+
+    if not holdings:
+        return html.Div("No holdings yet. Add some above.",
+                        style={"color": f"#{C['muted']}", "fontSize": "0.8rem",
+                               "padding": "0.5rem 0"})
+
+    th_s = {"padding": "6px 10px", "fontSize": "0.72rem", "fontWeight": "700",
+             "color": f"#{C['muted']}", "textAlign": "left",
+             "borderBottom": f"1px solid #{C['border']}"}
+    td_s = {"padding": "7px 10px", "fontSize": "0.82rem", "color": f"#{C['text']}"}
+    td_r = {**td_s, "textAlign": "right"}
+
+    rows = []
+    for i, h in enumerate(holdings):
+        val = h.get("quantity", 0) * h.get("avg_cost", 0)
+        rows.append(html.Tr([
+            html.Td(h["ticker"],                          style={**td_s, "fontWeight": "700"}),
+            html.Td(h.get("sector", "—"),                 style=td_s),
+            html.Td(f"{h.get('quantity', 0):,}",          style=td_r),
+            html.Td(f"${h.get('avg_cost', 0):,.2f}",      style=td_r),
+            html.Td(f"${val:,.0f}",                        style={**td_r, "color": f"#{C['green']}",
+                                                                   "fontWeight": "700"}),
+            html.Td(
+                html.Button("✕", id={"type": "holding-del-btn", "index": i}, n_clicks=0,
+                            style={
+                                "background": "transparent", "border": "none",
+                                "color": f"#{C['red']}", "cursor": "pointer",
+                                "fontSize": "0.95rem", "padding": "0 4px",
+                            }),
+                style={"textAlign": "center", "padding": "4px"},
+            ),
+        ], style={"borderBottom": f"1px solid #{C['border']}20"}))
+
+    return html.Table([
+        html.Thead(html.Tr([
+            html.Th("Ticker",       style=th_s),
+            html.Th("Sector",       style=th_s),
+            html.Th("Qty",          style={**th_s, "textAlign": "right"}),
+            html.Th("Avg Cost",     style={**th_s, "textAlign": "right"}),
+            html.Th("Market Value", style={**th_s, "textAlign": "right"}),
+            html.Th("",             style=th_s),
+        ])),
+        html.Tbody(rows),
+    ], className="raw-table")
+
+
+@app.callback(
+    Output("portfolio-edit-store", "data",  allow_duplicate=True),
+    Output("h-ticker",             "value"),
+    Output("h-qty",                "value"),
+    Output("h-cost",               "value"),
+    Input("holding-add-btn",       "n_clicks"),
+    State("h-ticker",              "value"),
+    State("h-qty",                 "value"),
+    State("h-cost",                "value"),
+    State("h-sector",              "value"),
+    State("portfolio-edit-store",  "data"),
+    prevent_initial_call=True,
+)
+def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
+    if not n_clicks:
+        return no_update, no_update, no_update, no_update
+
+    ticker = (ticker or "").strip().upper()
+    if not ticker:
+        return no_update, no_update, no_update, no_update
+
+    try:
+        qty_f  = float(qty  or 0)
+        cost_f = float(cost or 0)
+    except (ValueError, TypeError):
+        return no_update, no_update, no_update, no_update
+
+    if qty_f <= 0 or cost_f <= 0:
+        return no_update, no_update, no_update, no_update
+
+    current = dict(store_data or {})
+    holdings = list(current.get("holdings", []))
+
+    # Update if ticker already exists
+    for h in holdings:
+        if h["ticker"] == ticker:
+            h["quantity"] = qty_f
+            h["avg_cost"]  = cost_f
+            if sector:
+                h["sector"] = sector
+            current["holdings"] = holdings
+            return current, "", None, None
+
+    holdings.append({
+        "ticker":   ticker,
+        "quantity": qty_f,
+        "avg_cost":  cost_f,
+        "sector":   sector or "Other",
+    })
+    current["holdings"] = holdings
+    return current, "", None, None
+
+
+@app.callback(
+    Output("portfolio-edit-store", "data", allow_duplicate=True),
+    Input({"type": "holding-del-btn", "index": ALL}, "n_clicks"),
+    State("portfolio-edit-store", "data"),
+    prevent_initial_call=True,
+)
+def delete_holding(n_clicks_list, store_data):
+    if not any(n for n in (n_clicks_list or []) if n):
+        return no_update
+
+    triggered = ctx.triggered_id
+    if not isinstance(triggered, dict):
+        return no_update
+
+    idx      = triggered["index"]
+    current  = dict(store_data or {})
+    holdings = list(current.get("holdings", []))
+    current["holdings"] = [h for i, h in enumerate(holdings) if i != idx]
+    return current
+
+
+@app.callback(
+    Output("portfolio-save-status", "children"),
+    Input("portfolio-save-btn",     "n_clicks"),
+    State("auth-store",             "data"),
+    State("portfolio-edit-store",   "data"),
+    prevent_initial_call=True,
+)
+def save_portfolio_callback(n_clicks, auth_data, store_data):
+    if not n_clicks or not store_data:
+        return no_update
+
+    success, errors = [], []
+
+    # Save to Firestore (if logged in)
+    if auth_data:
+        uid      = auth_data.get("uid", "")
+        id_token = auth_data.get("idToken", "")
+        if uid and id_token:
+            if fb.save_portfolio(uid, id_token, store_data):
+                success.append("Cloud")
+            else:
+                errors.append("Cloud save failed")
+
+    # Always persist to local my_portfolio.json so charts update on refresh
+    try:
+        portfolio_path = os.path.join(os.path.dirname(__file__), "my_portfolio.json")
+        with open(portfolio_path, "w", encoding="utf-8") as fh:
+            json.dump(store_data, fh, indent=2, ensure_ascii=False)
+        success.append("Local file")
+    except Exception as exc:
+        errors.append(f"File save failed: {exc}")
+
+    if success:
+        targets = " & ".join(success)
+        return html.Span(
+            f"✓ Saved to {targets}. Refresh the page to see updated charts.",
+            style={"color": f"#{C['green']}", "fontSize": "0.78rem"},
+        )
+    return html.Span(
+        f"✗ {'; '.join(errors)}",
+        style={"color": f"#{C['red']}", "fontSize": "0.78rem"},
+    )
 
 
 # ── SCHEDULER ──────────────────────────────────────────────────────────────────
