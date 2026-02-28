@@ -191,12 +191,56 @@ def send_insider_cluster_alert(
     return _post(blocks, text, channel)
 
 
+def send_form4_realtime_alert(
+    ticker: str,
+    company: str,
+    insider: str,
+    role: str,
+    signal: str,
+    shares: int,
+    value_usd: float,
+    is_10b51: bool = False,
+    channel: str | None = None,
+) -> bool:
+    """Near real-time Form 4 alert for a single insider transaction on a watched ticker."""
+    sig_icon = "🟢" if signal == "INSIDER_BUY" else ("⚪" if is_10b51 else "🔴")
+    sig_label = (
+        "Insider BUY" if signal == "INSIDER_BUY"
+        else ("10b5-1 Pre-planned Sale" if is_10b51 else "Insider SELL")
+    )
+    val_str  = f"${value_usd / 1e6:.2f}M" if value_usd >= 1_000_000 else f"${value_usd:,.0f}"
+    shr_str  = f"{shares:,}"
+
+    blocks = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"⚡ Real-Time Insider Alert — {ticker}", "emoji": True}},
+        {"type": "section", "fields": [
+            {"type": "mrkdwn", "text": f"*Company*\n{company or ticker}"},
+            {"type": "mrkdwn", "text": f"*Signal*\n{sig_icon} {sig_label}"},
+            {"type": "mrkdwn", "text": f"*Insider*\n{insider}"},
+            {"type": "mrkdwn", "text": f"*Role*\n{role}"},
+            {"type": "mrkdwn", "text": f"*Shares*\n{shr_str}"},
+            {"type": "mrkdwn", "text": f"*Value*\n{val_str}"},
+        ]},
+        {"type": "context", "elements": [
+            {"type": "mrkdwn",
+             "text": ("_Pre-planned 10b5-1 sale — lower bearish weight._"
+                      if is_10b51 else
+                      "_Form 4 filing detected within 2 hours of EDGAR submission._")},
+        ]},
+        {"type": "divider"},
+    ]
+    text = f"⚡ {sig_icon} {ticker} — {sig_label} | {insider} ({role}) | {val_str}"
+    return _post(blocks, text, channel)
+
+
 def send_daily_digest(
     top_recs: list[dict[str, Any]],
     rebalancing: list[dict[str, Any]] | None = None,
+    news: list[dict[str, Any]] | None = None,
     channel: str | None = None,
 ) -> bool:
-    """Morning digest: top 5 STRONG BUY / BUY recommendations + rebalancing actions."""
+    """Morning digest: top 5 STRONG BUY / BUY recommendations + optional news + rebalancing."""
     if not top_recs:
         return False
 
@@ -206,9 +250,25 @@ def send_daily_digest(
     blocks: list[dict] = [
         {"type": "header", "text": {"type": "plain_text",
             "text": f"🐋 WhaleTracker Daily Digest — {today}", "emoji": True}},
-        {"type": "section", "text": {"type": "mrkdwn",
-            "text": "*Top institutional signals for today:*"}},
     ]
+
+    # ── Market headlines (optional) ──────────────────────────────────────────
+    if news:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": "*📰 Market Headlines:*"}})
+        for item in news[:3]:
+            src  = item.get("source", "")
+            url  = item.get("url", "")
+            head = item.get("headline", "")
+            line = f"• <{url}|{head}>" if url else f"• {head}"
+            if src:
+                line += f"  _{src}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+        blocks.append({"type": "divider"})
+
+    # ── Top picks ────────────────────────────────────────────────────────────
+    blocks.append({"type": "section", "text": {"type": "mrkdwn",
+        "text": "*Top institutional signals for today:*"}})
 
     icons = {"STRONG BUY": "🚀", "BUY": "✅", "HOLD": "⏸️", "SELL": "🔻"}
     for rec in top_recs[:5]:

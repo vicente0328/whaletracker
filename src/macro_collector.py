@@ -1,0 +1,270 @@
+"""
+macro_collector.py
+------------------
+Fetches key US macroeconomic indicators from the FRED API
+(Federal Reserve Bank of St. Louis — free, no rate limits for research use).
+
+Required env var:
+    FRED_API_KEY  — free registration at https://fred.stlouisfed.org/docs/api/api_key.html
+
+If FRED_API_KEY is not set, returns realistic mock data covering the past 2 years.
+
+Each indicator is returned as:
+    {
+        "name":         str,          # display label
+        "unit":         str,          # "%" or "$T" etc.
+        "color":        str,          # hex color for chart
+        "current":      float,        # latest available value
+        "prev":         float,        # value ~1 year ago
+        "change_1y":    float,        # current - prev
+        "observations": [             # newest first, up to 60 data points
+            {"date": "YYYY-MM-DD", "value": float}, ...
+        ],
+    }
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from datetime import datetime, timedelta
+from typing import Any
+
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger    = logging.getLogger(__name__)
+_API_KEY  = os.getenv("FRED_API_KEY", "")
+_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
+
+# ── FRED series definitions ────────────────────────────────────────────────────
+_SERIES: dict[str, dict] = {
+    "fed_rate": {
+        "id":    "FEDFUNDS",
+        "name":  "Fed Funds Rate",
+        "unit":  "%",
+        "color": "#FF4757",
+        "desc":  "Federal Reserve target interest rate — the most watched macro lever.",
+    },
+    "cpi": {
+        "id":    "CPIAUCSL",
+        "name":  "CPI (YoY %)",
+        "unit":  "%",
+        "color": "#FFB800",
+        "desc":  "Consumer Price Index year-over-year change — the primary inflation gauge.",
+        "yoy":   True,   # raw index → compute YoY %
+    },
+    "yield_10y": {
+        "id":    "DGS10",
+        "name":  "10-Year Treasury Yield",
+        "unit":  "%",
+        "color": "#4B7BE5",
+        "desc":  "Benchmark long-term rate; rising yields pressure equity valuations.",
+    },
+    "unemployment": {
+        "id":    "UNRATE",
+        "name":  "Unemployment Rate",
+        "unit":  "%",
+        "color": "#A78BFA",
+        "desc":  "US civilian unemployment rate — key Fed dual-mandate indicator.",
+    },
+    "gdp_growth": {
+        "id":    "A191RL1Q225SBEA",
+        "name":  "Real GDP Growth (QoQ %)",
+        "unit":  "%",
+        "color": "#00D09C",
+        "desc":  "Annualised real GDP growth rate — the broadest economic health signal.",
+    },
+}
+
+# ── Module-level cache ─────────────────────────────────────────────────────────
+_cache: dict[str, Any] | None = None
+_cache_ts: datetime | None    = None
+_CACHE_TTL_HOURS               = 24
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def fetch_macro_indicators() -> dict[str, dict]:
+    """Return all 5 macro indicators, using cache if fresh.
+
+    Returns dict keyed by series identifier (fed_rate, cpi, yield_10y,
+    unemployment, gdp_growth).
+    """
+    global _cache, _cache_ts
+
+    now = datetime.utcnow()
+    if (_cache is not None and _cache_ts is not None
+            and (now - _cache_ts).total_seconds() < _CACHE_TTL_HOURS * 3600):
+        return _cache
+
+    if _API_KEY:
+        data = _fetch_from_fred()
+    else:
+        logger.info("FRED_API_KEY not set — using macro mock data")
+        data = _mock_macro()
+
+    _cache    = data
+    _cache_ts = now
+    return data
+
+
+# ---------------------------------------------------------------------------
+# FRED fetcher
+# ---------------------------------------------------------------------------
+
+def _fetch_from_fred() -> dict[str, dict]:
+    results: dict[str, dict] = {}
+    start_date = (datetime.utcnow() - timedelta(days=760)).strftime("%Y-%m-%d")
+
+    for key, meta in _SERIES.items():
+        try:
+            resp = requests.get(
+                _BASE_URL,
+                params={
+                    "series_id":  meta["id"],
+                    "api_key":    _API_KEY,
+                    "file_type":  "json",
+                    "sort_order": "desc",
+                    "limit":      60,
+                    "observation_start": start_date,
+                },
+                timeout=12,
+            )
+            resp.raise_for_status()
+            raw_obs = resp.json().get("observations", [])
+
+            obs = [
+                {"date": o["date"], "value": float(o["value"])}
+                for o in raw_obs
+                if o.get("value") not in (".", None, "")
+            ]
+
+            if meta.get("yoy") and len(obs) >= 13:
+                # Convert CPI index to YoY %: (current / 12-months-ago - 1) * 100
+                obs = _cpi_to_yoy(obs)
+
+            if not obs:
+                continue
+
+            # obs is newest-first from FRED (sort_order=desc)
+            current = obs[0]["value"]
+            # ~1 year ago: index 11 for monthly, 3 for quarterly
+            year_idx = 11 if len(obs) > 11 else len(obs) - 1
+            prev     = obs[year_idx]["value"]
+
+            results[key] = {
+                "name":         meta["name"],
+                "unit":         meta["unit"],
+                "color":        meta["color"],
+                "desc":         meta.get("desc", ""),
+                "current":      round(current, 2),
+                "prev":         round(prev, 2),
+                "change_1y":    round(current - prev, 2),
+                "observations": obs[:48],   # keep last 48 data points for chart
+            }
+
+        except Exception as exc:
+            logger.warning("FRED fetch failed for %s (%s): %s", key, meta["id"], exc)
+
+    # Fill any missing series with mock data
+    mock = _mock_macro()
+    for key in _SERIES:
+        if key not in results:
+            results[key] = mock[key]
+
+    return results
+
+
+def _cpi_to_yoy(obs: list[dict]) -> list[dict]:
+    """Convert a CPI level series (newest-first) to YoY % change."""
+    # obs[0] = newest, obs[12] = same month last year
+    yoy = []
+    for i, item in enumerate(obs):
+        if i + 12 >= len(obs):
+            break
+        past = obs[i + 12]["value"]
+        if past:
+            yoy.append({
+                "date":  item["date"],
+                "value": round((item["value"] / past - 1) * 100, 2),
+            })
+    return yoy
+
+
+# ---------------------------------------------------------------------------
+# Mock data (realistic 2023-2025 values, newest-first)
+# ---------------------------------------------------------------------------
+
+def _mock_macro() -> dict[str, dict]:
+    """Return realistic static macro data for mock/dev mode."""
+
+    def _series(values_newest_first: list[float], start_month: str) -> list[dict]:
+        """Build observation list from a list of values + starting month."""
+        obs = []
+        from datetime import date  # noqa: PLC0415
+        year, month = int(start_month[:4]), int(start_month[5:7])
+        for v in values_newest_first:
+            obs.append({"date": f"{year:04d}-{month:02d}-01", "value": v})
+            month -= 1
+            if month == 0:
+                month = 12
+                year -= 1
+        return obs
+
+    # Latest ≈ Jan 2026, 24 monthly points
+    fed_vals = [
+        5.33, 5.33, 5.33, 5.33, 5.33, 5.25, 5.25, 5.08,
+        4.83, 4.58, 4.33, 4.33, 4.33, 4.33, 4.33, 4.33,
+        4.33, 4.33, 4.08, 3.83, 3.08, 2.33, 1.58, 0.83,
+    ]
+    cpi_vals = [
+        2.9, 2.7, 2.6, 2.5, 2.4, 2.5, 2.6, 2.9,
+        3.0, 3.2, 3.4, 3.5, 3.7, 3.7, 3.2, 3.1,
+        3.0, 2.9, 3.4, 3.7, 4.0, 4.9, 5.5, 6.0,
+    ]
+    yield_vals = [
+        4.57, 4.42, 4.28, 4.17, 4.20, 4.25, 4.38, 4.30,
+        4.25, 4.22, 4.20, 4.40, 4.60, 4.70, 4.50, 4.25,
+        4.00, 3.95, 4.10, 4.30, 4.50, 4.70, 4.00, 3.80,
+    ]
+    unemp_vals = [
+        4.1, 4.2, 4.2, 4.3, 4.1, 4.0, 3.9, 3.8,
+        3.7, 3.7, 3.8, 3.9, 4.0, 4.1, 3.9, 3.8,
+        3.7, 3.6, 3.5, 3.4, 3.4, 3.5, 3.6, 3.7,
+    ]
+    # GDP is quarterly — 8 quarters
+    gdp_vals = [3.1, 2.8, 1.6, 3.4, 4.9, 2.1, 2.0, 2.6]
+    gdp_dates = [
+        "2025-10-01", "2025-07-01", "2025-04-01", "2025-01-01",
+        "2024-10-01", "2024-07-01", "2024-04-01", "2024-01-01",
+    ]
+    gdp_obs = [{"date": d, "value": v} for d, v in zip(gdp_dates, gdp_vals)]
+
+    def _build(key, vals, obs, start="2026-01-01"):
+        m = _SERIES[key]
+        use_obs = obs if obs else _series(vals, start[:7])
+        current = use_obs[0]["value"]
+        prev    = use_obs[min(11, len(use_obs) - 1)]["value"]
+        return {
+            "name":         m["name"],
+            "unit":         m["unit"],
+            "color":        m["color"],
+            "desc":         m.get("desc", ""),
+            "current":      current,
+            "prev":         prev,
+            "change_1y":    round(current - prev, 2),
+            "observations": use_obs,
+        }
+
+    return {
+        "fed_rate":    _build("fed_rate",    fed_vals,   []),
+        "cpi":         _build("cpi",         cpi_vals,   []),
+        "yield_10y":   _build("yield_10y",   yield_vals, []),
+        "unemployment":_build("unemployment",unemp_vals, []),
+        "gdp_growth":  _build("gdp_growth",  [],         gdp_obs),
+    }

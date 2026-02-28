@@ -25,6 +25,8 @@ from src.analysis_engine import (
     get_insider_sentiment,
 )
 from src.portfolio_manager import load_portfolio, suggest_rebalancing, get_current_sector_weights
+from src.macro_collector import fetch_macro_indicators
+from src.news_collector import fetch_market_news
 
 load_dotenv()
 DATA_MODE = os.getenv("DATA_MODE", "mock")
@@ -50,6 +52,8 @@ insider_summary  = get_insider_sentiment(insiders)
 portfolio        = load_portfolio()
 rebalancing      = suggest_rebalancing(portfolio, rotation)
 current_weights  = get_current_sector_weights(portfolio)
+macro_data       = fetch_macro_indicators()
+market_news      = fetch_market_news(5)
 
 # ── DESIGN TOKENS ──────────────────────────────────────────────────────────────
 C = {
@@ -527,6 +531,213 @@ def build_rec_cards(filter_val: str = "ALL", watchlist: list | None = None):
             cards.append(html.Div())
         rows.append(html.Div(cards, className="grid-3"))
     return html.Div(rows)
+
+
+def build_macro_tab():
+    """📈 Macro Dashboard — FRED economic indicators."""
+    # ── KPI cards row ──────────────────────────────────────────────────────────
+    kpi_order = ["fed_rate", "yield_10y", "cpi", "unemployment", "gdp_growth"]
+    kpi_cards = []
+    for key in kpi_order:
+        m = macro_data.get(key, {})
+        if not m:
+            continue
+        cur  = m["current"]
+        chg  = m["change_1y"]
+        col  = m["color"]
+        arrow = ("↑" if chg > 0 else "↓") if chg != 0 else "→"
+        chg_color = (f"#{C['red']}" if chg > 0 and key in ("fed_rate", "cpi", "yield_10y", "unemployment")
+                     else f"#{C['green']}" if chg > 0 else f"#{C['red']}")
+        kpi_cards.append(html.Div([
+            html.Div("◈", style={
+                "position": "absolute", "right": "12px", "top": "50%",
+                "transform": "translateY(-50%)", "fontSize": "2.8rem",
+                "opacity": "0.04", "color": col, "fontWeight": "900",
+            }),
+            html.Div(m["name"], className="kpi-label"),
+            html.Div(f"{cur:.2f}{m['unit']}", className="kpi-value"),
+            html.Div([
+                html.Span(f"{arrow} {abs(chg):.2f}pp vs 1Y ago",
+                          style={"color": chg_color, "fontWeight": "600",
+                                 "fontSize": "0.72rem"}),
+            ], className="kpi-sub"),
+        ], className="kpi-card", style={"borderLeft": f"3px solid {col}"}))
+
+    kpi_row = html.Div(kpi_cards, className="kpi-strip", style={"marginBottom": "1rem"})
+
+    # ── Line charts (2 per row) ─────────────────────────────────────────────────
+    chart_order_pairs = [
+        ("fed_rate", "yield_10y"),
+        ("cpi", "unemployment"),
+    ]
+    gdp_solo = "gdp_growth"
+
+    chart_rows = []
+    for left_key, right_key in chart_order_pairs:
+        row_charts = []
+        for key in (left_key, right_key):
+            m = macro_data.get(key, {})
+            if not m:
+                continue
+            obs = list(reversed(m.get("observations", [])))  # chronological
+            dates  = [o["date"] for o in obs]
+            values = [o["value"] for o in obs]
+            col = m["color"]
+            fig = go.Figure(go.Scatter(
+                x=dates, y=values,
+                mode="lines",
+                line=dict(color=col, width=2),
+                fill="tozeroy", fillcolor=f"{col}12",
+                hovertemplate="<b>%{x}</b><br>%{y:.2f}" + m["unit"] + "<extra></extra>",
+            ))
+            fig.update_layout(**plotly_base(
+                height=200,
+                title=dict(text=m["name"],
+                           font=dict(size=11, color=f"#{C['muted']}"),
+                           x=0, xanchor="left"),
+                xaxis=dict(showgrid=False, tickfont=dict(size=9),
+                           tickangle=-30, nticks=8),
+                yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)",
+                           ticksuffix=m["unit"], tickfont=dict(size=10),
+                           zeroline=False),
+                margin=dict(l=0, r=0, t=36, b=40),
+            ))
+            row_charts.append(dcc.Graph(figure=fig, config={"displayModeBar": False},
+                                        style={"flex": "1"}))
+        chart_rows.append(html.Div(row_charts, style={
+            "display": "flex", "gap": "1rem", "marginBottom": "1rem",
+        }))
+
+    # GDP solo (quarterly data — wider chart)
+    m_gdp = macro_data.get(gdp_solo, {})
+    if m_gdp:
+        obs  = list(reversed(m_gdp.get("observations", [])))
+        dates  = [o["date"] for o in obs]
+        values = [o["value"] for o in obs]
+        bar_colors = [f"#{C['green']}" if v >= 0 else f"#{C['red']}" for v in values]
+        fig_gdp = go.Figure(go.Bar(
+            x=dates, y=values,
+            marker=dict(color=bar_colors, line=dict(width=0)),
+            hovertemplate="<b>%{x}</b><br>%{y:.1f}%<extra></extra>",
+        ))
+        fig_gdp.update_layout(**plotly_base(
+            height=200,
+            title=dict(text=m_gdp["name"],
+                       font=dict(size=11, color=f"#{C['muted']}"),
+                       x=0, xanchor="left"),
+            xaxis=dict(showgrid=False, tickfont=dict(size=9), tickangle=-30),
+            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.06)",
+                       ticksuffix="%", tickfont=dict(size=10), zeroline=True,
+                       zerolinecolor="rgba(255,255,255,0.12)"),
+            margin=dict(l=0, r=0, t=36, b=40),
+            bargap=0.3,
+        ))
+        chart_rows.append(dcc.Graph(figure=fig_gdp, config={"displayModeBar": False},
+                                    style={"marginBottom": "1rem"}))
+
+    # ── Whale context note ──────────────────────────────────────────────────────
+    fed  = macro_data.get("fed_rate", {}).get("current", 0)
+    y10  = macro_data.get("yield_10y", {}).get("current", 0)
+    cpi  = macro_data.get("cpi", {}).get("current", 0)
+    spread = round(y10 - fed, 2)
+    context_lines = []
+    if fed >= 5.0:
+        context_lines.append("⚠️  Rates are elevated — Whales often rotate into Value/Financials in high-rate environments.")
+    elif fed <= 2.0:
+        context_lines.append("✅  Low rate environment — Growth/Tech stocks typically benefit from cheap capital.")
+    if cpi >= 4.0:
+        context_lines.append("⚠️  Inflation above 4% — watch for defensive rotation into Energy, Materials, Consumer Staples.")
+    elif cpi <= 2.5:
+        context_lines.append("✅  Inflation near Fed target — historically positive for broad equity markets.")
+    if spread < 0:
+        context_lines.append("⚠️  Inverted yield curve (10Y < Fed rate) — historically precedes economic slowdowns.")
+    elif spread > 1.5:
+        context_lines.append("✅  Positive yield curve spread — credit markets signalling expansion expectations.")
+    if not context_lines:
+        context_lines.append("📊  Macro conditions are neutral — monitor for shifts in key indicators.")
+
+    context_card = html.Div([
+        html.Div("🔍  Whale Context",
+                 style={"fontSize": "0.72rem", "fontWeight": "700",
+                        "color": f"#{C['blue']}", "letterSpacing": "0.6px",
+                        "textTransform": "uppercase", "marginBottom": "0.6rem"}),
+        *[html.P(line, className="grow-desc", style={"marginBottom": "4px"})
+          for line in context_lines],
+    ], style={
+        "background": f"#{C['card2']}", "borderRadius": "12px",
+        "padding": "14px 16px", "border": f"1px solid #{C['border']}",
+        "borderLeft": f"3px solid #{C['blue']}",
+    })
+
+    return html.Div([kpi_row] + chart_rows + [context_card])
+
+
+def build_news_banner(news_list: list) -> html.Div:
+    """Compact horizontal news headline cards."""
+    if not news_list:
+        return html.Div()
+
+    cards = []
+    for item in news_list:
+        headline = item.get("headline", "")
+        source   = item.get("source", "")
+        url      = item.get("url", "")
+        pub      = item.get("published_at", "")
+        if not headline:
+            continue
+
+        inner = html.Div([
+            html.Div([
+                html.Span("📰", style={"marginRight": "5px", "fontSize": "0.75rem"}),
+                html.Span(source, style={
+                    "fontSize": "0.58rem", "fontWeight": "700",
+                    "color": f"#{C['blue']}", "textTransform": "uppercase",
+                    "letterSpacing": "0.4px",
+                }),
+                *([ html.Span(f"  {pub}", style={
+                        "fontSize": "0.58rem", "color": f"#{C['muted']}",
+                    })] if pub else []),
+            ], style={"marginBottom": "3px"}),
+            html.Div(
+                headline,
+                style={"fontSize": "0.73rem", "color": f"#{C['text']}",
+                       "lineHeight": "1.4", "fontWeight": "500"},
+            ),
+        ], style={
+            "background": f"#{C['card']}", "borderRadius": "8px",
+            "padding": "8px 12px", "flex": "1", "minWidth": "200px",
+            "maxWidth": "280px", "border": f"1px solid #{C['border']}",
+            "borderTop": f"2px solid #{C['blue']}",
+        })
+
+        if url:
+            cards.append(html.A(inner, href=url, target="_blank", style={
+                "textDecoration": "none", "flex": "1",
+                "minWidth": "200px", "maxWidth": "280px",
+            }))
+        else:
+            cards.append(inner)
+
+    if not cards:
+        return html.Div()
+
+    return html.Div([
+        html.Div([
+            html.Span("📰", style={"fontSize": "0.7rem", "marginRight": "5px"}),
+            html.Span("Market Headlines", style={
+                "fontSize": "0.62rem", "fontWeight": "700",
+                "color": f"#{C['muted']}", "letterSpacing": "0.5px",
+                "textTransform": "uppercase",
+            }),
+        ], style={"marginBottom": "0.5rem"}),
+        html.Div(cards, style={
+            "display": "flex", "gap": "0.7rem",
+            "flexWrap": "nowrap", "overflowX": "auto",
+        }),
+    ], style={
+        "padding": "0.7rem 0", "marginBottom": "0.3rem",
+        "borderBottom": f"1px solid #{C['border']}40",
+    })
 
 
 def build_portfolio_tab():
@@ -1666,6 +1877,9 @@ app.layout = html.Div([
         ], className="header-right"),
     ], className="header"),
 
+    # News banner (between header and KPI strip)
+    build_news_banner(market_news),
+
     # KPI strip
     html.Div([
         kpi_card("WHALES TRACKED",   str(live_whales),          "active institutions",    C["blue"]),
@@ -1681,6 +1895,8 @@ app.layout = html.Div([
         dcc.Tab(label="💡  Recommendations", value="tab-recs",
                 className="tab", selected_className="tab-active"),
         dcc.Tab(label="📊  My Portfolio",    value="tab-port",
+                className="tab", selected_className="tab-active"),
+        dcc.Tab(label="📈  Macro",           value="tab-macro",
                 className="tab", selected_className="tab-active"),
     ]),
 
@@ -1756,6 +1972,8 @@ def render_tab(tab: str):
         ])
     if tab == "tab-port":
         return build_portfolio_tab()
+    if tab == "tab-macro":
+        return build_macro_tab()
 
 
 @app.callback(

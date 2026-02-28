@@ -9,6 +9,9 @@ Environment variables (all optional):
   DAILY_DIGEST_HOUR       — UTC hour to send morning digest (default: 8)
   ALERT_WATCHLIST         — comma-separated tickers to watch, e.g. "AAPL,NVDA"
   ALERT_MIN_SCORE         — minimum score delta to trigger watchlist alert (default: 2)
+  FORM4_WATCH_TICKERS     — comma-separated tickers for real-time Form 4 polling
+                            (falls back to ALERT_WATCHLIST if not set)
+  FORM4_REFRESH_MINUTES   — Form 4 polling interval in minutes (default: 30)
 """
 
 import logging
@@ -22,19 +25,28 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-REFRESH_INTERVAL_HOURS = int(os.getenv("REFRESH_INTERVAL_HOURS", "4"))
-DAILY_DIGEST_HOUR      = int(os.getenv("DAILY_DIGEST_HOUR", "8"))
-ALERT_MIN_SCORE        = int(os.getenv("ALERT_MIN_SCORE", "2"))
-_WATCHLIST_RAW         = os.getenv("ALERT_WATCHLIST", "")
+REFRESH_INTERVAL_HOURS  = int(os.getenv("REFRESH_INTERVAL_HOURS", "4"))
+DAILY_DIGEST_HOUR       = int(os.getenv("DAILY_DIGEST_HOUR", "8"))
+ALERT_MIN_SCORE         = int(os.getenv("ALERT_MIN_SCORE", "2"))
+FORM4_REFRESH_MINUTES   = int(os.getenv("FORM4_REFRESH_MINUTES", "30"))
+
+_WATCHLIST_RAW = os.getenv("ALERT_WATCHLIST", "")
 ALERT_WATCHLIST: set[str] = {
     t.strip().upper() for t in _WATCHLIST_RAW.split(",") if t.strip()
 }
 
+# Form 4 watch list: separate env var, falls back to ALERT_WATCHLIST
+_F4_RAW = os.getenv("FORM4_WATCH_TICKERS", "") or _WATCHLIST_RAW
+FORM4_WATCH_TICKERS: list[str] = [
+    t.strip().upper() for t in _F4_RAW.split(",") if t.strip()
+]
+
 # In-memory snapshot: {ticker: {"recommendation": str, "conviction_score": int}}
 _snapshot: dict[str, dict[str, Any]] = {}
 _last_insider_alert: dict[str, datetime] = {}   # ticker → last alerted time
-_INSIDER_CLUSTER_MIN   = 3      # insiders that must sell within window
-_INSIDER_CLUSTER_DAYS  = 30
+_form4_seen_accessions: set[str] = set()         # dedup set for real-time Form 4 alerts
+_INSIDER_CLUSTER_MIN  = 3       # insiders that must sell within window
+_INSIDER_CLUSTER_DAYS = 30
 
 _scheduler = None
 
@@ -90,6 +102,20 @@ def start(app_data: dict[str, Any]) -> None:
         replace_existing=True,
         kwargs={"app_data": app_data},
     )
+
+    # ── Real-time Form 4 polling (runs more frequently than full refresh) ───
+    if FORM4_WATCH_TICKERS:
+        _scheduler.add_job(
+            _realtime_form4_job,
+            trigger="interval",
+            minutes=FORM4_REFRESH_MINUTES,
+            id="form4_realtime",
+            replace_existing=True,
+        )
+        logger.info(
+            "Form 4 real-time polling — %d tickers, every %d min",
+            len(FORM4_WATCH_TICKERS), FORM4_REFRESH_MINUTES,
+        )
 
     _scheduler.start()
     logger.info(
@@ -182,17 +208,75 @@ def _refresh_and_alert(app_data: dict[str, Any]) -> None:
     logger.info("[scheduler] Refresh complete — %d recommendations", len(new_recs))
 
 
+def _realtime_form4_job() -> None:
+    """Poll EDGAR for new Form 4 filings on watched tickers and fire per-transaction alerts."""
+    if not FORM4_WATCH_TICKERS:
+        return
+
+    logger.info("[scheduler] Form 4 poll — %d tickers", len(FORM4_WATCH_TICKERS))
+    try:
+        from src.data_collector import fetch_recent_form4_filings  # noqa: PLC0415
+        from src.slack_notifier import send_form4_realtime_alert   # noqa: PLC0415
+    except Exception as exc:
+        logger.error("[scheduler] Form 4 import error: %s", exc)
+        return
+
+    try:
+        txs = fetch_recent_form4_filings(FORM4_WATCH_TICKERS, hours_back=2)
+    except Exception as exc:
+        logger.error("[scheduler] Form 4 fetch error: %s", exc)
+        return
+
+    new_alerts = 0
+    for tx in txs:
+        acc = tx.get("accession", "")
+        if not acc or acc in _form4_seen_accessions:
+            continue
+        _form4_seen_accessions.add(acc)
+
+        signal = tx.get("signal", "")
+        # Alert on buys always; alert on sells only if not pre-planned
+        if signal not in {"INSIDER_BUY", "INSIDER_SELL", "PLANNED_SELL"}:
+            continue
+
+        ticker = tx.get("ticker", "")
+        try:
+            send_form4_realtime_alert(
+                ticker    = ticker,
+                company   = tx.get("company", ""),
+                insider   = tx.get("insider", "Insider"),
+                role      = tx.get("role", ""),
+                signal    = signal,
+                shares    = tx.get("shares", 0),
+                value_usd = tx.get("value_usd", 0.0),
+                is_10b51  = tx.get("is_10b51", False),
+            )
+            new_alerts += 1
+        except Exception as exc:
+            logger.error("[scheduler] Form 4 alert send failed (%s): %s", ticker, exc)
+
+    logger.info("[scheduler] Form 4 poll complete — %d new alerts", new_alerts)
+
+
 def _daily_digest_job(app_data: dict[str, Any]) -> None:
-    """Send the morning digest Slack message."""
+    """Send the morning digest Slack message, including market news headlines."""
     from src.slack_notifier import send_daily_digest  # noqa: PLC0415
 
-    recs       = app_data.get("recommendations", [])
+    recs        = app_data.get("recommendations", [])
     rebalancing = app_data.get("rebalancing", [])
-    top_recs   = [r for r in recs
-                  if r.get("recommendation") in {"STRONG BUY", "BUY"}][:5]
+    top_recs    = [r for r in recs
+                   if r.get("recommendation") in {"STRONG BUY", "BUY"}][:5]
+
+    # Fetch fresh market news headlines for the digest
+    news: list[dict] | None = None
+    try:
+        from src.news_collector import fetch_market_news  # noqa: PLC0415
+        news = fetch_market_news(3)
+    except Exception:
+        pass  # news is optional — digest still sends without it
 
     if top_recs:
-        send_daily_digest(top_recs, rebalancing or None)
+        send_daily_digest(top_recs, rebalancing or None, news=news)
         logger.info("[scheduler] Daily digest sent (%d signals)", len(top_recs))
     else:
         logger.info("[scheduler] No BUY/STRONG BUY signals — digest skipped")

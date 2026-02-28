@@ -221,6 +221,61 @@ def fetch_form4_filings(tickers: list[str] | None = None) -> dict[str, list[dict
     return _fetch_fmp_form4(tickers or [])
 
 
+def fetch_recent_form4_filings(
+    watch_tickers: list[str],
+    hours_back: int = 2,
+) -> list[dict[str, Any]]:
+    """Poll EDGAR EFTS for Form 4 filings in the last `hours_back` hours.
+
+    Designed for the real-time alert scheduler — returns a flat list of
+    transaction dicts (same schema as _parse_edgar_form4) each augmented
+    with ``"ticker"`` and ``"accession"`` fields for deduplication.
+
+    Uses no API key; falls back to empty list on any network error.
+    """
+    from datetime import datetime, timedelta  # already imported at module top, but local for clarity
+
+    now    = datetime.now()
+    start  = (now - timedelta(hours=hours_back)).strftime("%Y-%m-%d")
+    today  = now.strftime("%Y-%m-%d")
+    results: list[dict] = []
+
+    for ticker in watch_tickers:
+        try:
+            search = requests.get(
+                "https://efts.sec.gov/LATEST/search-index",
+                params={
+                    "q":         f'"{ticker}"',
+                    "forms":     "4",
+                    "dateRange": "custom",
+                    "startdt":   start,
+                    "enddt":     today,
+                },
+                headers=_EDGAR_HEADERS,
+                timeout=12,
+            )
+            if not search.ok:
+                continue
+            hits = search.json().get("hits", {}).get("hits", [])
+
+            for hit in hits[:5]:
+                src       = hit.get("_source", {})
+                acc       = src.get("accession_no", "")
+                entity_id = src.get("entity_id", "")
+                if not acc or not entity_id:
+                    continue
+                txs = _parse_edgar_form4(int(entity_id), acc, ticker)
+                for tx in txs:
+                    tx["ticker"]    = ticker
+                    tx["accession"] = acc
+                results.extend(txs)
+
+        except Exception as exc:
+            logger.debug("fetch_recent_form4 skip %s: %s", ticker, exc)
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Public API — N-PORT
 # ---------------------------------------------------------------------------
