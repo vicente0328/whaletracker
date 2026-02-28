@@ -1,0 +1,244 @@
+/* ── WhaleTracker AI — Dark Fintech Theme ───────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: #0D0F14;
+    font-family: 'Inter', -apple-system, sans-serif;
+    color: #E8ECF0;
+}
+
+/* ── App shell ── */
+.app-shell {
+    background: #0D0F14;
+    min-height: 100vh;
+    padding: 1.5rem 2rem 3rem;
+}
+
+/* ── Header ── */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    margin-bottom: 1.4rem;
+}
+.header-left  { display: flex; align-items: center; gap: 14px; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+
+.logo-emoji  { font-size: 2rem; line-height: 1; filter: drop-shadow(0 0 12px #4B7BE566); }
+.logo-title  { font-size: 1.4rem; font-weight: 800; color: #E8ECF0; letter-spacing: -0.5px; line-height: 1.15; }
+.logo-ai     { color: #4B7BE5; }
+.logo-sub    { font-size: 0.7rem; color: #8892A4; font-weight: 400; letter-spacing: 0.4px; margin-top: 2px; }
+
+.mode-badge  { border-radius: 6px; padding: 3px 10px; font-size: 0.67rem; font-weight: 700; letter-spacing: 0.8px; }
+.timestamp   { color: #8892A4; font-size: 0.75rem; }
+
+/* ── KPI Strip ── */
+.kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+}
+.kpi-card {
+    background: #161922;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+    position: relative;
+    overflow: hidden;
+}
+.kpi-label { font-size: 0.63rem; color: #8892A4; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 0.3rem; }
+.kpi-value { font-size: 1.65rem; font-weight: 800; color: #E8ECF0; letter-spacing: -0.5px; line-height: 1.05; }
+.kpi-sub   { font-size: 0.68rem; color: #8892A4; margin-top: 0.2rem; }
+
+/* ── Tabs ── */
+.main-tabs {
+    background: #161922 !important;
+    border-radius: 12px !important;
+    padding: 4px !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    display: inline-flex !important;
+    width: auto !important;
+}
+.tab {
+    background: transparent !important;
+    border-radius: 8px !important;
+    color: #8892A4 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.87rem !important;
+    padding: 7px 20px !important;
+    border: none !important;
+    transition: all 0.15s ease !important;
+}
+.tab:hover  { color: #E8ECF0 !important; }
+.tab-active { background: #1E2130 !important; color: #E8ECF0 !important; font-weight: 600 !important; border: none !important; }
+
+/* Remove default Dash tab styling */
+.tab--selected, .tab { border-bottom: none !important; }
+.tabs-content         { border: none !important; }
+
+/* ── Grid Helpers ── */
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; }
+
+/* ── Holding Cards (Tab 1) ── */
+.holding-card {
+    background: #161922;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+.holding-header  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
+.holding-ticker  { font-size: 1.1rem; font-weight: 800; color: #E8ECF0; letter-spacing: -0.3px; }
+.holding-company { font-size: 0.71rem; color: #8892A4; margin-bottom: 0.65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.holding-stats   { display: flex; justify-content: space-between; align-items: flex-end; }
+
+/* ── Whale Section Headers (Tab 1) ── */
+.whale-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 1.4rem 0 0.8rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.whale-name { font-size: 1rem; font-weight: 700; color: #E8ECF0; }
+.whale-meta { color: #8892A4; font-size: 0.74rem; }
+
+/* ── Stat primitives ── */
+.stat-label { font-size: 0.58rem; color: #8892A4; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; }
+.stat-value { font-size: 0.9rem; font-weight: 600; color: #E8ECF0; }
+
+/* ── Recommendation Cards (Tab 2) ── */
+.rec-filter-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.rec-filter {
+    display: flex !important;
+    gap: 6px !important;
+    flex-wrap: wrap;
+}
+.rec-filter label {
+    background: #161922;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: #8892A4;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.15s ease;
+}
+.rec-filter label:has(input:checked) {
+    background: #1E2130;
+    border-color: #4B7BE5;
+    color: #E8ECF0;
+}
+.rec-filter input[type="radio"] { display: none; }
+
+.rec-count   { color: #8892A4; font-size: 0.73rem; text-align: right; }
+.rec-card    { background: #161922; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 1.1rem; margin-bottom: 0.8rem; }
+.rec-header  { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.75rem; }
+.rec-ticker  { font-size: 1.5rem; font-weight: 800; color: #E8ECF0; letter-spacing: -0.8px; line-height: 1; }
+.rec-company { font-size: 0.7rem; color: #8892A4; margin-top: 3px; }
+.rec-footer  { font-size: 0.67rem; color: #8892A4; border-top: 1px solid rgba(255,255,255,0.07); padding-top: 0.5rem; line-height: 1.4; }
+
+.conviction-row   { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.conviction-track { background: #1E2130; border-radius: 3px; height: 4px; overflow: hidden; }
+
+/* ── Portfolio Tab ── */
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0.6rem 0 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid rgba(255,255,255,0.07);
+}
+.section-title { font-size: 0.95rem; font-weight: 700; color: #E8ECF0; }
+.success-banner {
+    background: #161922;
+    border: 1px solid rgba(0,208,156,0.27);
+    border-radius: 12px;
+    padding: 1rem;
+    color: #00D09C;
+    font-size: 0.85rem;
+}
+
+/* ── Rebalancing Cards ── */
+.reb-card     { background: #161922; border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 0.6rem; }
+.reb-header   { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.55rem; }
+.reb-sector   { font-weight: 700; font-size: 0.9rem; color: #E8ECF0; }
+.reb-stats    { display: flex; gap: 0.8rem; align-items: flex-end; margin-bottom: 0.5rem; }
+.reb-rationale{ font-size: 0.68rem; color: #8892A4; line-height: 1.5; }
+
+/* ── Raw Holdings Table ── */
+.expander-summary {
+    background: #161922;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    color: #E8ECF0;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+    margin-top: 1rem;
+    font-family: 'Inter', sans-serif;
+}
+details[open] .expander-summary { border-radius: 10px 10px 0 0; }
+.raw-table-wrapper {
+    background: #1E2130;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    overflow-x: auto;
+}
+.raw-table   { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
+.tbl-th      { padding: 7px 10px; color: #8892A4; font-weight: 600; font-size: 0.63rem; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+
+/* ── Empty state ── */
+.empty-state {
+    background: #161922;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    color: #8892A4;
+    font-size: 0.88rem;
+    margin-top: 1rem;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar         { width: 5px; height: 5px; }
+::-webkit-scrollbar-track   { background: #0D0F14; }
+::-webkit-scrollbar-thumb   { background: rgba(255,255,255,0.07); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(136,146,164,0.4); }
+
+/* ── Plotly containers ── */
+.js-plotly-plot { background: transparent !important; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+    .grid-4    { grid-template-columns: repeat(2, 1fr); }
+    .grid-3    { grid-template-columns: 1fr; }
+    .charts-row{ grid-template-columns: 1fr; }
+    .app-shell { padding: 1rem; }
+}

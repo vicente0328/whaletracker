@@ -1,8 +1,7 @@
-# WhaleTracker AI — Dashboard Dependencies
-# Minimal set for Streamlit Cloud deployment
-
-streamlit==1.32.0
-pandas==2.2.1
+# WhaleTracker AI — Dependencies
+dash==2.16.1
 plotly==5.20.0
+pandas==2.2.1
 requests==2.31.0
 python-dotenv==1.0.1
+gunicorn==21.2.0
