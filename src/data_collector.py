@@ -316,12 +316,15 @@ def _find_13f_holdings_doc(cik_int: int, acc: str) -> str | None:
             text, re.IGNORECASE,
         )
 
-        # Priority 1 — document whose surrounding HTML marks it INFORMATION TABLE
+        # Priority 1 — document whose <tr> row contains "INFORMATION TABLE"
+        # Cap search at the closing </tr> so we don't bleed into the next row
         for link in xml_links:
             pos = text.lower().find(link.lower())
             if pos >= 0:
-                nearby = text[pos: pos + 350]
-                if re.search(r"information\s*table", nearby, re.IGNORECASE):
+                row_end = text.find("</tr>", pos)
+                row_end = row_end if row_end > 0 else pos + 300
+                row_text = text[pos:row_end]
+                if re.search(r"information\s*table", row_text, re.IGNORECASE):
                     return f"https://www.sec.gov{link}"
 
         # Priority 2 — filename contains "table" / "info" / "holdings"
@@ -384,8 +387,8 @@ def _parse_13f_xml(xml_url: str) -> list[dict[str, Any]]:
     raw_entries = []
     total_value = 0
 
-    # {*}tag matches any namespace (Python 3.8+ ElementTree wildcard)
-    for info in root.iter("{*}infoTable"):
+    # findall(".//{*}tag") matches any namespace; iter() does NOT support {*}
+    for info in root.findall(".//{*}infoTable"):
         name_el   = info.find("{*}nameOfIssuer")
         value_el  = info.find("{*}value")           # USD thousands
         shares_el = info.find(".//{*}sshPrnamt")
@@ -768,7 +771,7 @@ def _parse_nport_xml(cik: str, filing: dict) -> list[dict[str, Any]]:
             return []
 
         holdings: list[dict] = []
-        for sec in root.iter("{*}invstOrSec"):
+        for sec in root.findall(".//{*}invstOrSec"):
             # Ticker: lives in <identifiers><ticker> or direct <ticker>
             ticker_el = sec.find(".//{*}ticker") or sec.find("{*}ticker")
             if ticker_el is None or not (ticker_el.text or "").strip():
