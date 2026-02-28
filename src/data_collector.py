@@ -60,10 +60,72 @@ TRACKED_WHALES: dict[str, str] = {
 }
 
 # Tracked N-PORT funds: {display_name: CIK}
+# CIKs verified via data.sec.gov/submissions/CIK{cik}.json
 TRACKED_NPORT_FUNDS: dict[str, str] = {
-    "Vanguard 500 Index":  "0000102909",
-    "Fidelity Contrafund": "0000021624",
-    "ARK Innovation ETF":  "0001697748",
+    "Vanguard 500 Index": "0000102909",
+    "ARK Innovation ETF": "0001697748",
+    "SPDR S&P 500 ETF":   "0000884394",   # SPY trust (State Street)
+}
+
+# ---------------------------------------------------------------------------
+# Hardcoded company-name → ticker map for 13F XML parsing
+# (13F documents carry CUSIP + company name, not ticker symbols)
+# ---------------------------------------------------------------------------
+_13F_NAME_MAP: dict[str, str] = {
+    # Technology
+    "apple inc": "AAPL",                "microsoft corp": "MSFT",
+    "microsoft corporation": "MSFT",    "amazon.com inc": "AMZN",
+    "amazon com inc": "AMZN",           "alphabet inc": "GOOGL",
+    "alphabet inc cl a": "GOOGL",       "alphabet inc cl c": "GOOG",
+    "meta platforms inc": "META",       "meta platforms": "META",
+    "tesla inc": "TSLA",               "nvidia corp": "NVDA",
+    "nvidia corporation": "NVDA",       "broadcom inc": "AVGO",
+    "oracle corp": "ORCL",             "salesforce inc": "CRM",
+    "adobe inc": "ADBE",               "qualcomm inc": "QCOM",
+    "advanced micro devices": "AMD",    "intel corp": "INTC",
+    "applied materials inc": "AMAT",    "lam research corp": "LRCX",
+    "servicenow inc": "NOW",           "snowflake inc": "SNOW",
+    "palantir technologies": "PLTR",   "uber technologies": "UBER",
+    "airbnb inc": "ABNB",             "datadog inc": "DDOG",
+    # Finance
+    "berkshire hathaway inc": "BRK-B", "berkshire hathaway": "BRK-B",
+    "jpmorgan chase & co": "JPM",      "jpmorgan chase": "JPM",
+    "bank of america corp": "BAC",     "bank of america": "BAC",
+    "wells fargo & co": "WFC",         "wells fargo": "WFC",
+    "citigroup inc": "C",             "goldman sachs group inc": "GS",
+    "morgan stanley": "MS",           "american express co": "AXP",
+    "visa inc": "V",                  "mastercard inc": "MA",
+    "blackrock inc": "BLK",           "charles schwab corp": "SCHW",
+    "s&p global inc": "SPGI",
+    # Energy
+    "exxon mobil corp": "XOM",         "exxon mobil": "XOM",
+    "chevron corp": "CVX",             "occidental petroleum corp": "OXY",
+    "occidental petroleum": "OXY",     "conocophillips": "COP",
+    "pioneer natural resources": "PXD","marathon oil corp": "MRO",
+    "hess corp": "HES",               "coterra energy inc": "CTRA",
+    # Healthcare
+    "unitedhealth group inc": "UNH",   "unitedhealth": "UNH",
+    "johnson & johnson": "JNJ",        "abbvie inc": "ABBV",
+    "eli lilly & co": "LLY",          "eli lilly and co": "LLY",
+    "pfizer inc": "PFE",              "merck & co inc": "MRK",
+    "thermo fisher scientific": "TMO", "abbott laboratories": "ABT",
+    "danaher corp": "DHR",            "intuitive surgical inc": "ISRG",
+    "cigna group": "CI",              "elevance health inc": "ELV",
+    # Consumer
+    "amazon com": "AMZN",             "home depot inc": "HD",
+    "walmart inc": "WMT",             "costco wholesale corp": "COST",
+    "nike inc": "NKE",                "mcdonalds corp": "MCD",
+    "starbucks corp": "SBUX",         "procter & gamble co": "PG",
+    "coca-cola co": "KO",             "coca cola co": "KO",
+    "pepsico inc": "PEP",             "colgate-palmolive co": "CL",
+    "target corp": "TGT",             "lowes companies inc": "LOW",
+    # Industrial / Other
+    "caterpillar inc": "CAT",          "deere & co": "DE",
+    "union pacific corp": "UNP",       "united parcel service": "UPS",
+    "boeing co": "BA",                "lockheed martin corp": "LMT",
+    "3m co": "MMM",                   "honeywell international": "HON",
+    "emerson electric co": "EMR",      "ge healthcare": "GEHC",
+    "s&p 500 etf tr": "SPY",          "spdr s&p 500 etf tr": "SPY",
 }
 
 # Signal thresholds
@@ -181,13 +243,152 @@ def _classify_signal(current: dict[str, Any], previous: dict[str, Any] | None) -
 
 
 def _fetch_fmp_13f(cik: str) -> list[dict[str, Any]]:
-    if not FMP_API_KEY:
-        raise EnvironmentError("FMP_API_KEY not set.")
-    url = (f"https://financialmodelingprep.com/api/v3/form-thirteen-f/{cik}"
-           f"?apikey={FMP_API_KEY}")
-    resp = requests.get(url, timeout=15)
+    """Try FMP first; fall back to EDGAR if the plan doesn't include 13F."""
+    if FMP_API_KEY:
+        url = (f"https://financialmodelingprep.com/api/v3/form-thirteen-f/{cik}"
+               f"?apikey={FMP_API_KEY}")
+        resp = requests.get(url, timeout=15)
+        if resp.status_code in (401, 403):
+            logger.info("FMP plan does not include 13F (HTTP %s) — falling back to EDGAR.", resp.status_code)
+        else:
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, list) and data:
+                return _normalize_fmp_holdings(data)
+
+    # EDGAR fallback (free, no key required)
+    return _fetch_edgar_13f(cik)
+
+
+def _fetch_edgar_13f(cik: str) -> list[dict[str, Any]]:
+    """Fetch 13F-HR holdings directly from SEC EDGAR."""
+    resp = requests.get(
+        f"https://data.sec.gov/submissions/CIK{cik}.json",
+        headers=_EDGAR_HEADERS, timeout=20,
+    )
     resp.raise_for_status()
-    return _normalize_fmp_holdings(resp.json())
+    data   = resp.json()
+    recent = data.get("filings", {}).get("recent", {})
+
+    forms    = recent.get("form", [])
+    acc_nums = recent.get("accessionNumber", [])
+
+    for i, form_type in enumerate(forms):
+        if form_type != "13F-HR":
+            continue
+        acc = acc_nums[i] if i < len(acc_nums) else ""
+        if not acc:
+            continue
+
+        cik_int   = int(cik)
+        holdings_url = _find_13f_holdings_doc(cik_int, acc)
+        if holdings_url:
+            result = _parse_13f_xml(holdings_url)
+            if result:
+                return result
+        break   # Only try the most recent 13F-HR
+
+    return []
+
+
+def _find_13f_holdings_doc(cik_int: int, acc: str) -> str | None:
+    """Return the URL of the 13F holdings XML within a given filing."""
+    acc_clean = acc.replace("-", "")
+    index_url = (f"https://www.sec.gov/Archives/edgar/data/"
+                 f"{cik_int}/{acc_clean}/{acc}-index.htm")
+    try:
+        resp = requests.get(index_url, headers=_EDGAR_HEADERS, timeout=15)
+        resp.raise_for_status()
+        # Grab every .xml link from the index page
+        xml_links = re.findall(
+            r'href="(/Archives/edgar/data/\d+/\d+/[^"]+\.xml)"',
+            resp.text, re.IGNORECASE,
+        )
+        # Prefer files with "table" / "info" / "holdings" in the name
+        for link in xml_links:
+            fname = link.split("/")[-1].lower()
+            if any(kw in fname for kw in ("table", "info", "holdings")):
+                return f"https://www.sec.gov{link}"
+        if xml_links:
+            return f"https://www.sec.gov{xml_links[0]}"
+    except Exception as exc:
+        logger.debug("13F index error for %s: %s", acc, exc)
+    return None
+
+
+def _parse_13f_xml(xml_url: str) -> list[dict[str, Any]]:
+    """Download and parse a 13F-HR holdings XML into our internal schema."""
+    resp = requests.get(xml_url, headers=_EDGAR_HEADERS, timeout=30)
+    resp.raise_for_status()
+    content = resp.text
+
+    # Strip XML namespaces for simple tag access
+    content = re.sub(r'\s+xmlns(?::[^=]+)?="[^"]*"', "", content)
+    content = re.sub(r"<([a-zA-Z]+:)",  "<",  content)
+    content = re.sub(r"</([a-zA-Z]+:)", "</", content)
+
+    root        = ET.fromstring(content)
+    raw_entries = []
+    total_value = 0
+
+    for info in root.iter("infoTable"):
+        name_el   = info.find("nameOfIssuer")
+        value_el  = info.find("value")           # USD thousands
+        shares_el = info.find(".//sshPrnamt")
+
+        if name_el is None or value_el is None:
+            continue
+
+        raw_name = (name_el.text or "").strip()
+        ticker   = _resolve_ticker(raw_name)
+        if not ticker:
+            continue
+
+        try:
+            value_usd = int(value_el.text or 0) * 1_000
+            shares    = int(shares_el.text or 0) if shares_el is not None else 0
+        except (ValueError, TypeError):
+            continue
+
+        total_value += value_usd
+        raw_entries.append({
+            "ticker":    ticker,
+            "company":   raw_name.title(),
+            "shares":    shares,
+            "value_usd": value_usd,
+        })
+
+    if not raw_entries:
+        return []
+
+    # Sort by value, compute portfolio_pct
+    raw_entries.sort(key=lambda x: x["value_usd"], reverse=True)
+    return [
+        {**e, "portfolio_pct": e["value_usd"] / total_value if total_value else 0}
+        for e in raw_entries
+    ]
+
+
+def _resolve_ticker(company_name: str) -> str:
+    """Map a 13F issuer name to a ticker symbol."""
+    key = company_name.lower().strip()
+
+    # 1. Direct match
+    if key in _13F_NAME_MAP:
+        return _13F_NAME_MAP[key]
+
+    # 2. Strip common suffixes and retry
+    for suffix in (" inc", " corp", " co", " ltd", " llc", " plc", " & co"):
+        stripped = key.removesuffix(suffix).strip()
+        if stripped in _13F_NAME_MAP:
+            return _13F_NAME_MAP[stripped]
+
+    # 3. Substring match (first matching key that appears inside company_name)
+    for map_key, ticker in _13F_NAME_MAP.items():
+        if map_key in key:
+            return ticker
+
+    return ""   # Unknown — skip this holding
 
 
 def _normalize_fmp_holdings(raw: list[dict]) -> list[dict[str, Any]]:
