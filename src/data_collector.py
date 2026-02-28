@@ -293,25 +293,52 @@ def _fetch_edgar_13f(cik: str) -> list[dict[str, Any]]:
 
 
 def _find_13f_holdings_doc(cik_int: int, acc: str) -> str | None:
-    """Return the URL of the 13F holdings XML within a given filing."""
+    """Return the URL of the 13F information-table XML within a given filing.
+
+    The EDGAR 13F-HR filing always contains two XML documents:
+      primary_doc.xml   — cover page   (type: 13F-HR)
+      infotable.xml     — holdings     (type: INFORMATION TABLE)
+    We must pick the latter.  EDGAR also exposes XSL-rendered HTML at
+    paths like xslForm13F_X02/<file>.xml — those are not raw XML and must
+    be excluded.
+    """
     acc_clean = acc.replace("-", "")
     index_url = (f"https://www.sec.gov/Archives/edgar/data/"
                  f"{cik_int}/{acc_clean}/{acc}-index.htm")
     try:
         resp = requests.get(index_url, headers=_EDGAR_HEADERS, timeout=15)
         resp.raise_for_status()
-        # Grab every .xml link from the index page
+        text = resp.text
+
+        # Only consider XML files in the accession root (no XSL subdir paths)
         xml_links = re.findall(
-            r'href="(/Archives/edgar/data/\d+/\d+/[^"]+\.xml)"',
-            resp.text, re.IGNORECASE,
+            r'href="(/Archives/edgar/data/\d+/\d+/[^/"]+\.xml)"',
+            text, re.IGNORECASE,
         )
-        # Prefer files with "table" / "info" / "holdings" in the name
+
+        # Priority 1 — document whose surrounding HTML marks it INFORMATION TABLE
+        for link in xml_links:
+            pos = text.lower().find(link.lower())
+            if pos >= 0:
+                nearby = text[pos: pos + 350]
+                if re.search(r"information\s*table", nearby, re.IGNORECASE):
+                    return f"https://www.sec.gov{link}"
+
+        # Priority 2 — filename contains "table" / "info" / "holdings"
         for link in xml_links:
             fname = link.split("/")[-1].lower()
             if any(kw in fname for kw in ("table", "info", "holdings")):
                 return f"https://www.sec.gov{link}"
+
+        # Priority 3 — any XML that is NOT the cover-page primary doc
+        for link in xml_links:
+            if "primary_doc" not in link.lower():
+                return f"https://www.sec.gov{link}"
+
+        # Last resort — return whatever is there (possibly cover page)
         if xml_links:
             return f"https://www.sec.gov{xml_links[0]}"
+
     except Exception as exc:
         logger.debug("13F index error for %s: %s", acc, exc)
     return None
@@ -666,10 +693,14 @@ def _latest_nport_for_cik(cik: str) -> list[dict[str, Any]]:
     nport_meta: list[dict] = []
     for i, form_type in enumerate(forms):
         if form_type == "NPORT-P":
+            raw_doc = primary_docs[i] if i < len(primary_docs) else ""
+            # Strip EDGAR XSL viewer prefix, e.g. "xslFormNPORT-P_X01/primary_doc.xml"
+            # → "primary_doc.xml"  (raw XML is in the accession root, not a subdir)
+            clean_doc = re.sub(r"^xsl[^/]+/", "", raw_doc)
             nport_meta.append({
-                "acc":  acc_nums[i]     if i < len(acc_nums)     else "",
-                "date": dates[i]        if i < len(dates)        else "",
-                "doc":  primary_docs[i] if i < len(primary_docs) else "",
+                "acc":  acc_nums[i] if i < len(acc_nums) else "",
+                "date": dates[i]    if i < len(dates)    else "",
+                "doc":  clean_doc,
             })
         if len(nport_meta) >= 2:
             break
