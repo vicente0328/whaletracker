@@ -2181,10 +2181,11 @@ def render_tab(tab: str, auth_data):
             return dcc.Loading(
                 build_macro_tab(),
                 type="circle",
-                color=f"#{C['accent']}",
+                color=f"#{C['blue']}",
             )
         except Exception as exc:
-            logger.error("build_macro_tab failed: %s", exc, exc_info=True)
+            import logging as _logging
+            _logging.getLogger(__name__).error("build_macro_tab failed: %s", exc, exc_info=True)
             return html.Div(
                 f"Error loading macro data: {exc}",
                 style={"color": f"#{C['red']}", "padding": "2rem",
