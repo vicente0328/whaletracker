@@ -12,8 +12,17 @@ from dash import Dash, html, dcc, Input, Output, ctx
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
-from src.data_collector import fetch_all_whale_filings
-from src.analysis_engine import build_recommendations, get_sector_rotation_signals
+from src.data_collector import (
+    fetch_all_whale_filings,
+    fetch_13dg_filings,
+    fetch_form4_filings,
+    fetch_nport_filings,
+)
+from src.analysis_engine import (
+    build_recommendations,
+    get_sector_rotation_signals,
+    get_insider_sentiment,
+)
 from src.portfolio_manager import load_portfolio, suggest_rebalancing, get_current_sector_weights
 
 load_dotenv()
@@ -21,8 +30,18 @@ DATA_MODE = os.getenv("DATA_MODE", "mock")
 
 # ── DATA (loaded once at startup) ──────────────────────────────────────────────
 filings          = fetch_all_whale_filings()
-recommendations  = build_recommendations(filings)
+activist         = fetch_13dg_filings()
+insiders         = fetch_form4_filings()
+nport            = fetch_nport_filings()
+
+recommendations  = build_recommendations(
+    filings,
+    activist_filings=activist,
+    insider_filings=insiders,
+    nport_filings=nport,
+)
 rotation         = get_sector_rotation_signals(filings)
+insider_summary  = get_insider_sentiment(insiders)
 portfolio        = load_portfolio()
 rebalancing      = suggest_rebalancing(portfolio, rotation)
 current_weights  = get_current_sector_weights(portfolio)
@@ -36,10 +55,20 @@ C = {
 }
 
 SIG = {
-    "NEW_ENTRY":          {"color": f"#{C['blue']}",  "label": "NEW ENTRY"},
-    "AGGRESSIVE_BUY":     {"color": f"#{C['green']}", "label": "AGG. BUY"},
-    "HIGH_CONCENTRATION": {"color": f"#{C['amber']}", "label": "HIGH CONC"},
-    "HOLD":               {"color": "#4A5568",         "label": "HOLD"},
+    # 13F signals
+    "NEW_ENTRY":           {"color": f"#{C['blue']}",   "label": "NEW ENTRY"},
+    "AGGRESSIVE_BUY":      {"color": f"#{C['green']}",  "label": "AGG. BUY"},
+    "HIGH_CONCENTRATION":  {"color": f"#{C['amber']}",  "label": "HIGH CONC"},
+    "HOLD":                {"color": "#4A5568",           "label": "HOLD"},
+    # SC 13D/G signals
+    "ACTIVIST_STAKE":      {"color": f"#{C['red']}",    "label": "ACTIVIST"},
+    "LARGE_PASSIVE_STAKE": {"color": f"#{C['purple']}", "label": "13G STAKE"},
+    # Form 4 signals
+    "INSIDER_BUY":         {"color": f"#{C['green']}",  "label": "INSIDER BUY"},
+    "INSIDER_SELL":        {"color": f"#{C['red']}",    "label": "INSIDER SELL"},
+    # N-PORT signals
+    "FUND_ACCUMULATION":   {"color": "#20B2AA",           "label": "FUND ACCUM"},
+    "FUND_LIQUIDATION":    {"color": "#FF8C00",            "label": "FUND SELL"},
 }
 
 REC = {
@@ -53,9 +82,17 @@ PALETTE = [f"#{C['blue']}", f"#{C['green']}", f"#{C['amber']}",
            f"#{C['purple']}", f"#{C['red']}", "#20B2AA", "#FF8C00", "#9B59B6"]
 
 # ── DERIVED METRICS ────────────────────────────────────────────────────────────
-active_signals = sum(
-    1 for holds in filings.values()
-    for h in holds if h.get("signal", "HOLD") != "HOLD"
+_POSITIVE_SIGNALS = {"NEW_ENTRY", "AGGRESSIVE_BUY", "HIGH_CONCENTRATION",
+                     "ACTIVIST_STAKE", "LARGE_PASSIVE_STAKE",
+                     "INSIDER_BUY", "FUND_ACCUMULATION"}
+active_signals = (
+    sum(1 for holds in filings.values()
+        for h in holds if h.get("signal", "HOLD") in _POSITIVE_SIGNALS)
+    + sum(1 for f in activist.values() if f.get("signal") in _POSITIVE_SIGNALS)
+    + sum(1 for txs in insiders.values()
+          for t in txs if t.get("signal") in _POSITIVE_SIGNALS)
+    + sum(1 for holds in nport.values()
+          for h in holds if h.get("signal") in _POSITIVE_SIGNALS)
 )
 live_whales = len([w for w, h in filings.items() if h])
 port_value  = sum(
@@ -290,6 +327,160 @@ def build_whale_tab():
             while len(cards) < N:
                 cards.append(html.Div())
             sections.append(html.Div(cards, className="grid-4"))
+
+    # ── SC 13D/G activist / passive stake filings ────────────────────────────
+    if activist:
+        sections.append(html.Div([
+            html.Div([
+                html.Span("📋  SC 13D / 13G Filings", className="whale-name"),
+                html.Span("≥5% ownership disclosures · 5-10 day lag",
+                          className="whale-meta"),
+            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+        ], className="whale-header"))
+
+        act_cards = []
+        for ticker, f in sorted(activist.items(),
+                                 key=lambda x: x[1].get("pct_outstanding", 0),
+                                 reverse=True):
+            sig  = f.get("signal", "LARGE_PASSIVE_STAKE")
+            si   = SIG.get(sig, SIG["HOLD"])
+            pct  = f.get("pct_outstanding", 0)
+            form = f.get("form_type", "SC 13G")
+            act_cards.append(html.Div([
+                html.Div([
+                    html.Span(ticker, className="holding-ticker"),
+                    html.Span(si["label"], style={
+                        "background": f"{si['color']}18", "color": si["color"],
+                        "borderRadius": "4px", "padding": "1px 7px",
+                        "fontSize": "0.6rem", "fontWeight": "700",
+                    }),
+                ], className="holding-header"),
+                html.Div(f.get("filer", ""), className="holding-company"),
+                html.Div([
+                    html.Div([html.Div("Form",    className="stat-label"),
+                              html.Div(form,      className="stat-value", style={"fontSize": "0.75rem"})]),
+                    html.Div([html.Div("% Owned", className="stat-label"),
+                              html.Div(f"{pct:.1%}", className="stat-value",
+                                       style={"color": si["color"]})],
+                             style={"textAlign": "right"}),
+                ], className="holding-stats"),
+            ], className="holding-card",
+               style={"borderTop": f"2px solid {si['color']}"}))
+
+        N = 4
+        for i in range(0, len(act_cards), N):
+            chunk = act_cards[i:i + N]
+            while len(chunk) < N:
+                chunk.append(html.Div())
+            sections.append(html.Div(chunk, className="grid-4"))
+
+    # ── Form 4 insider transactions ───────────────────────────────────────────
+    if insiders:
+        insider_rows = []
+        for ticker, txs in insiders.items():
+            for tx in txs:
+                sig = tx.get("signal", "INSIDER_BUY")
+                si  = SIG.get(sig, SIG["HOLD"])
+                is_buy = sig == "INSIDER_BUY"
+                val_str = f"${tx.get('value_usd', 0) / 1e6:.2f}M"
+                insider_rows.append(html.Div([
+                    html.Div([
+                        html.Span(ticker, className="holding-ticker",
+                                  style={"fontSize": "1rem"}),
+                        html.Span(si["label"], style={
+                            "background": f"{si['color']}18", "color": si["color"],
+                            "borderRadius": "4px", "padding": "1px 7px",
+                            "fontSize": "0.6rem", "fontWeight": "700",
+                        }),
+                    ], className="holding-header"),
+                    html.Div(f"{tx.get('insider','')} · {tx.get('role','')}",
+                             className="holding-company"),
+                    html.Div([
+                        html.Div([html.Div("Shares", className="stat-label"),
+                                  html.Div(f"{tx.get('shares',0):,}", className="stat-value",
+                                           style={"fontSize": "0.8rem"})]),
+                        html.Div([html.Div("Value", className="stat-label"),
+                                  html.Div(val_str, className="stat-value",
+                                           style={"color": si["color"], "fontSize": "0.8rem"})],
+                                 style={"textAlign": "right"}),
+                    ], className="holding-stats"),
+                ], className="holding-card",
+                   style={"borderTop": f"2px solid {si['color']}"}))
+
+        sections.append(html.Div([
+            html.Div([
+                html.Span("👤  Form 4 — Insider Transactions", className="whale-name"),
+                html.Span("Officers & directors · 2-day filing lag",
+                          className="whale-meta"),
+            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+        ], className="whale-header"))
+
+        N = 4
+        for i in range(0, len(insider_rows), N):
+            chunk = insider_rows[i:i + N]
+            while len(chunk) < N:
+                chunk.append(html.Div())
+            sections.append(html.Div(chunk, className="grid-4"))
+
+    # ── N-PORT fund holdings ──────────────────────────────────────────────────
+    if nport:
+        sections.append(html.Div([
+            html.Div([
+                html.Span("📦  N-PORT — Monthly Fund Holdings", className="whale-name"),
+                html.Span("Registered funds · 60-day lag · month-over-month change",
+                          className="whale-meta"),
+            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+        ], className="whale-header"))
+
+        for fund_name, holdings in nport.items():
+            non_hold = sum(1 for h in holdings
+                           if h.get("signal", "HOLD") not in ("HOLD",))
+            sections.append(html.Div([
+                html.Div([
+                    html.Span(fund_name, style={"fontWeight": "600",
+                              "fontSize": "0.85rem", "color": "#E8ECF0"}),
+                ]),
+                html.Span(f"{len(holdings)} positions · {non_hold} changes",
+                          className="whale-meta"),
+            ], className="whale-header",
+               style={"marginTop": "0.8rem", "marginBottom": "0.5rem",
+                      "borderBottomColor": "rgba(255,255,255,0.04)"}))
+
+            N = 4
+            for i in range(0, len(holdings), N):
+                chunk = holdings[i:i + N]
+                cards = []
+                for h in chunk:
+                    sig = h.get("signal", "HOLD")
+                    si  = SIG.get(sig, SIG["HOLD"])
+                    chg = h.get("change_pct", 0)
+                    chg_str = f"{'+' if chg >= 0 else ''}{chg:.0%} MoM"
+                    cards.append(html.Div([
+                        html.Div([
+                            html.Span(h["ticker"], className="holding-ticker"),
+                            html.Span(si["label"], style={
+                                "background": f"{si['color']}18", "color": si["color"],
+                                "borderRadius": "4px", "padding": "1px 7px",
+                                "fontSize": "0.6rem", "fontWeight": "700",
+                            }),
+                        ], className="holding-header"),
+                        html.Div(h.get("company", ""), className="holding-company"),
+                        html.Div([
+                            html.Div([html.Div("MoM Chg", className="stat-label"),
+                                      html.Div(chg_str, className="stat-value",
+                                               style={"color": si["color"],
+                                                      "fontSize": "0.8rem"})]),
+                            html.Div([html.Div("Portfolio", className="stat-label"),
+                                      html.Div(f"{h.get('portfolio_pct',0):.1%}",
+                                               className="stat-value",
+                                               style={"fontSize": "0.8rem"})],
+                                     style={"textAlign": "right"}),
+                        ], className="holding-stats"),
+                    ], className="holding-card",
+                       style={"borderTop": f"2px solid {si['color']}"}))
+                while len(cards) < N:
+                    cards.append(html.Div())
+                sections.append(html.Div(cards, className="grid-4"))
 
     return html.Div(sections)
 
@@ -658,7 +849,7 @@ app.layout = html.Div([
     # KPI strip
     html.Div([
         kpi_card("WHALES TRACKED",   str(live_whales),          "active institutions",    C["blue"]),
-        kpi_card("ACTIVE SIGNALS",   str(active_signals),        "NEW ENTRY · AGG. BUY",  C["green"]),
+        kpi_card("ACTIVE SIGNALS",   str(active_signals),        "13F · 13D/G · Form 4 · N-PORT",  C["green"]),
         kpi_card("PORTFOLIO VALUE",  f"${port_value:,.0f}",      "at avg cost basis",      C["purple"]),
         kpi_card("TOP CONVICTION",   top_rec.get("ticker", "—"), top_rec.get("recommendation", "—"), C["amber"]),
     ], className="kpi-strip"),

@@ -1,14 +1,20 @@
 """
 analysis_engine.py
 ------------------
-Correlates Whale signal data with macroeconomic context and recent price
-action to produce Buy / Hold / Sell recommendations with a conviction score.
+Aggregates signals from all four SEC filing types into per-ticker conviction
+scores and Buy / Hold / Sell recommendations.
 
-Key considerations:
-  - 13F filings have a ~45-day reporting lag; price action is used to
-    confirm or discount stale positions.
-  - Macro context (interest rate regime, CPI trend) shifts conviction
-    thresholds.
+Signal scoring:
+  13F signals      NEW_ENTRY +3 | AGGRESSIVE_BUY +4 | HIGH_CONCENTRATION +2
+  13D/G signals    ACTIVIST_STAKE +5 | LARGE_PASSIVE_STAKE +2
+  Form 4 signals   INSIDER_BUY +3 | INSIDER_SELL -2
+  N-PORT signals   FUND_ACCUMULATION +2 | FUND_LIQUIDATION -1
+
+Recommendation thresholds (after macro adjustment):
+  STRONG BUY  score ≥ 6, or score ≥ 4 with 2+ whale sources
+  BUY         score ≥ 3
+  HOLD        score ≥ 1
+  SELL        score = 0 or negative
 """
 
 import logging
@@ -21,14 +27,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 SIGNAL_SCORES: dict[str, int] = {
-    "NEW_ENTRY":          3,
-    "AGGRESSIVE_BUY":     4,
-    "HIGH_CONCENTRATION": 2,
-    "HOLD":               0,
+    # 13F signals
+    "NEW_ENTRY":           3,
+    "AGGRESSIVE_BUY":      4,
+    "HIGH_CONCENTRATION":  2,
+    "HOLD":                0,
+    # SC 13D/G signals
+    "ACTIVIST_STAKE":      5,
+    "LARGE_PASSIVE_STAKE": 2,
+    # Form 4 signals
+    "INSIDER_BUY":         3,
+    "INSIDER_SELL":       -2,
+    # N-PORT signals
+    "FUND_ACCUMULATION":   2,
+    "FUND_LIQUIDATION":   -1,
 }
 
-# How many Whales must agree before conviction is "HIGH"
-HIGH_CONVICTION_THRESHOLD = 2
+HIGH_CONVICTION_THRESHOLD = 2   # min whale sources for STRONG BUY fast-track
+MAX_INSIDER_BONUS = 2           # cap on Form 4 entries counted per ticker
 
 
 # ---------------------------------------------------------------------------
@@ -36,62 +52,96 @@ HIGH_CONVICTION_THRESHOLD = 2
 # ---------------------------------------------------------------------------
 
 def build_recommendations(
-    whale_filings: dict[str, list[dict[str, Any]]],
-    macro_context: dict[str, Any] | None = None,
+    whale_filings:    dict[str, list[dict[str, Any]]],
+    macro_context:    dict[str, Any] | None = None,
+    activist_filings: dict[str, dict[str, Any]] | None = None,
+    insider_filings:  dict[str, list[dict[str, Any]]] | None = None,
+    nport_filings:    dict[str, list[dict[str, Any]]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Aggregate Whale signals into per-ticker recommendations.
+    """Aggregate all filing signals into per-ticker recommendations.
 
     Args:
-        whale_filings:  Output of data_collector.fetch_all_whale_filings().
-        macro_context:  Optional macro snapshot, e.g.:
-                        {"rate_regime": "rising", "cpi_trend": "cooling"}
+        whale_filings:     {whale_name: [holding_dict]}  ← 13F
+        macro_context:     Optional {"rate_regime": "rising"|"neutral", ...}
+        activist_filings:  {ticker: filing_dict}         ← SC 13D/G
+        insider_filings:   {ticker: [tx_dict]}           ← Form 4
+        nport_filings:     {fund_name: [holding_dict]}   ← N-PORT
 
     Returns:
-        List of recommendation dicts, sorted by conviction score descending.
-        Each dict contains:
-          ticker, signal_summary, whale_count, conviction_score,
-          recommendation, supporting_whales, macro_note
+        List of recommendation dicts sorted by conviction_score descending.
     """
     ticker_map: dict[str, dict] = {}
 
+    # ── 1. 13F whale signals ─────────────────────────────────────────────────
     for whale_name, holdings in whale_filings.items():
         for holding in holdings:
             ticker = holding.get("ticker", "")
             if not ticker:
                 continue
-
-            if ticker not in ticker_map:
-                ticker_map[ticker] = {
-                    "ticker": ticker,
-                    "company": holding.get("company", ""),
-                    "signals": [],
-                    "conviction_score": 0,
-                    "supporting_whales": [],
-                }
-
+            entry = _get_or_create(ticker_map, ticker, holding)
             signal = holding.get("signal", "HOLD")
-            ticker_map[ticker]["signals"].append(signal)
-            ticker_map[ticker]["conviction_score"] += SIGNAL_SCORES.get(signal, 0)
-            ticker_map[ticker]["supporting_whales"].append(whale_name)
+            entry["signals"].append(signal)
+            entry["conviction_score"] += SIGNAL_SCORES.get(signal, 0)
+            entry["supporting_whales"].append(whale_name)
 
+    # ── 2. SC 13D/G activist / passive stake signals ─────────────────────────
+    for ticker, filing in (activist_filings or {}).items():
+        entry = _get_or_create(ticker_map, ticker, {})
+        signal = filing.get("signal", "LARGE_PASSIVE_STAKE")
+        entry["signals"].append(signal)
+        entry["conviction_score"] += SIGNAL_SCORES.get(signal, 0)
+        entry["activist_filing"] = filing
+        pct = filing.get("pct_outstanding", 0)
+        entry["sources"].add(
+            f"{'🔴 13D' if filing.get('form_type') == 'SC 13D' else '🟡 13G'} "
+            f"{filing.get('filer','?')} ({pct:.1%})"
+        )
+
+    # ── 3. Form 4 insider transaction signals ────────────────────────────────
+    for ticker, transactions in (insider_filings or {}).items():
+        entry = _get_or_create(ticker_map, ticker, {})
+        # Cap contribution to avoid over-weighting noisy insider sells
+        for tx in transactions[:MAX_INSIDER_BONUS]:
+            signal = tx.get("signal", "INSIDER_BUY")
+            entry["signals"].append(signal)
+            entry["conviction_score"] += SIGNAL_SCORES.get(signal, 0)
+            role = tx.get("role", "")
+            name = tx.get("insider", "?")
+            entry["sources"].add(f"👤 {name} ({role})")
+
+    # ── 4. N-PORT fund signals ───────────────────────────────────────────────
+    for fund_name, holdings in (nport_filings or {}).items():
+        for holding in holdings:
+            ticker = holding.get("ticker", "")
+            if not ticker:
+                continue
+            entry = _get_or_create(ticker_map, ticker, holding)
+            signal = holding.get("signal", "FUND_ACCUMULATION")
+            entry["signals"].append(signal)
+            entry["conviction_score"] += SIGNAL_SCORES.get(signal, 0)
+            chg = holding.get("change_pct", 0)
+            entry["sources"].add(
+                f"📦 {fund_name} ({'+' if chg >= 0 else ''}{chg:.0%})"
+            )
+
+    # ── 5. Build final list ──────────────────────────────────────────────────
     recommendations = []
     for ticker, data in ticker_map.items():
-        recommendation = _score_to_recommendation(
+        rec = _score_to_recommendation(
             data["conviction_score"],
-            len(data["supporting_whales"]),
+            len(set(data["supporting_whales"])),
             macro_context,
         )
-        macro_note = _build_macro_note(ticker, macro_context)
-
         recommendations.append({
-            "ticker": ticker,
-            "company": data["company"],
-            "signal_summary": ", ".join(set(data["signals"])),
-            "whale_count": len(set(data["supporting_whales"])),
-            "conviction_score": data["conviction_score"],
-            "recommendation": recommendation,
+            "ticker":            ticker,
+            "company":           data["company"],
+            "signal_summary":    ", ".join(dict.fromkeys(data["signals"])),  # dedup, preserve order
+            "whale_count":       len(set(data["supporting_whales"])),
+            "conviction_score":  data["conviction_score"],
+            "recommendation":    rec,
             "supporting_whales": list(set(data["supporting_whales"])),
-            "macro_note": macro_note,
+            "sources":           sorted(data["sources"]),
+            "macro_note":        _build_macro_note(macro_context),
         })
 
     recommendations.sort(key=lambda r: r["conviction_score"], reverse=True)
@@ -102,45 +152,62 @@ def get_sector_rotation_signals(
     whale_filings: dict[str, list[dict[str, Any]]],
     sector_map: dict[str, str] | None = None,
 ) -> dict[str, float]:
-    """Calculate net institutional flow score per sector.
-
-    Args:
-        whale_filings: Output of fetch_all_whale_filings().
-        sector_map:    Optional {ticker: sector} override. Falls back to a
-                       built-in map for common tickers.
-
-    Returns:
-        {sector: net_score} sorted descending — positive = inflows.
-    """
+    """Calculate net institutional flow score per sector from 13F filings."""
     _sector_map = _DEFAULT_SECTOR_MAP.copy()
     if sector_map:
         _sector_map.update(sector_map)
 
     sector_scores: dict[str, float] = {}
-
     for _whale, holdings in whale_filings.items():
         for holding in holdings:
             sector = _sector_map.get(holding["ticker"], "Unknown")
-            score = SIGNAL_SCORES.get(holding.get("signal", "HOLD"), 0)
+            score  = SIGNAL_SCORES.get(holding.get("signal", "HOLD"), 0)
             sector_scores[sector] = sector_scores.get(sector, 0.0) + score
 
     return dict(sorted(sector_scores.items(), key=lambda x: x[1], reverse=True))
+
+
+def get_insider_sentiment(
+    insider_filings: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    """Summarise insider buy/sell activity per ticker.
+
+    Returns:
+        {ticker: {"buy_count": int, "sell_count": int, "net_value_usd": float}}
+    """
+    summary: dict[str, dict] = {}
+    for ticker, transactions in insider_filings.items():
+        buys  = [t for t in transactions if t.get("signal") == "INSIDER_BUY"]
+        sells = [t for t in transactions if t.get("signal") == "INSIDER_SELL"]
+        net   = sum(t.get("value_usd", 0) for t in buys) \
+              - sum(t.get("value_usd", 0) for t in sells)
+        summary[ticker] = {
+            "buy_count":    len(buys),
+            "sell_count":   len(sells),
+            "net_value_usd": net,
+        }
+    return summary
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _score_to_recommendation(
-    score: int,
-    whale_count: int,
-    macro_context: dict | None,
-) -> str:
-    rate_regime = (macro_context or {}).get("rate_regime", "neutral")
+def _get_or_create(ticker_map: dict, ticker: str, holding: dict) -> dict:
+    if ticker not in ticker_map:
+        ticker_map[ticker] = {
+            "ticker":            ticker,
+            "company":           holding.get("company", ""),
+            "signals":           [],
+            "conviction_score":  0,
+            "supporting_whales": [],
+            "sources":           set(),
+        }
+    return ticker_map[ticker]
 
-    # Rising rates penalise growth / tech slightly
-    rate_penalty = 1 if rate_regime == "rising" else 0
 
+def _score_to_recommendation(score: int, whale_count: int, macro_context: dict | None) -> str:
+    rate_penalty = 1 if (macro_context or {}).get("rate_regime") == "rising" else 0
     adjusted = score - rate_penalty
 
     if adjusted >= 6 or (adjusted >= 4 and whale_count >= HIGH_CONVICTION_THRESHOLD):
@@ -152,7 +219,7 @@ def _score_to_recommendation(
     return "SELL"
 
 
-def _build_macro_note(ticker: str, macro_context: dict | None) -> str:
+def _build_macro_note(macro_context: dict | None) -> str:
     if not macro_context:
         return ""
     notes = []
@@ -163,11 +230,13 @@ def _build_macro_note(ticker: str, macro_context: dict | None) -> str:
     return " ".join(notes)
 
 
-# Lightweight sector lookup for common tickers (extend as needed)
 _DEFAULT_SECTOR_MAP: dict[str, str] = {
-    "AAPL": "Technology", "MSFT": "Technology", "NVDA": "Technology",
-    "GOOGL": "Technology", "META": "Technology", "AMZN": "Consumer Discretionary",
-    "XLE": "Energy", "CVX": "Energy", "OXY": "Energy",
-    "BAC": "Financials", "JPM": "Financials", "BRK-B": "Financials",
-    "UNH": "Healthcare", "JNJ": "Healthcare",
+    "AAPL": "Technology",          "MSFT": "Technology",
+    "NVDA": "Technology",          "GOOGL": "Technology",
+    "META": "Technology",          "TSLA": "Consumer Discretionary",
+    "COIN": "Financials",          "AMZN": "Consumer Discretionary",
+    "XLE":  "Energy",              "CVX":  "Energy",
+    "OXY":  "Energy",              "BAC":  "Financials",
+    "JPM":  "Financials",          "BRK-B":"Financials",
+    "UNH":  "Healthcare",          "JNJ":  "Healthcare",
 }
