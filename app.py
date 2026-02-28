@@ -8,7 +8,7 @@ Production:   gunicorn app:server --bind 0.0.0.0:$PORT
 import os
 from datetime import datetime
 
-from dash import Dash, html, dcc, Input, Output
+from dash import Dash, html, dcc, Input, Output, ctx
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
@@ -445,6 +445,184 @@ def build_portfolio_tab():
     return html.Div([mini_kpis, charts_row, reb_header, reb_content, raw_holdings])
 
 
+# ── GUIDE CONTENT ─────────────────────────────────────────────────────────────
+def _gsec(title: str, *children):
+    """Guide section wrapper."""
+    return html.Div([
+        html.Div(title, className="gsec-title"),
+        *children,
+    ], className="gsec")
+
+
+def _grow(badge_label: str, badge_color: str, score: str, desc: str):
+    """Signal/recommendation guide row."""
+    return html.Div([
+        html.Div([
+            html.Span(badge_label, style={
+                "background": f"{badge_color}18", "color": badge_color,
+                "border": f"1px solid {badge_color}44", "borderRadius": "5px",
+                "padding": "2px 9px", "fontSize": "0.7rem", "fontWeight": "700",
+                "marginRight": "8px", "whiteSpace": "nowrap",
+            }),
+            html.Span(score, style={
+                "fontSize": "0.68rem", "color": f"#{C['muted']}",
+                "background": f"#{C['card2']}", "borderRadius": "4px",
+                "padding": "1px 6px", "fontWeight": "600",
+            }),
+        ], style={"display": "flex", "alignItems": "center", "marginBottom": "4px"}),
+        html.Div(desc, className="grow-desc"),
+    ], className="grow")
+
+
+def _whale_row(name: str, manager: str):
+    return html.Div([
+        html.Span("🐋", style={"marginRight": "8px"}),
+        html.Div([
+            html.Div(name,    className="gwhale-name"),
+            html.Div(manager, className="gwhale-mgr"),
+        ]),
+    ], className="gwhale-row")
+
+
+def _gtab(icon: str, name: str, desc: str):
+    return html.Div([
+        html.Div([html.Span(icon, style={"marginRight": "8px"}), name],
+                 className="gtab-title"),
+        html.Div(desc, className="grow-desc"),
+    ], className="gtab-row")
+
+
+def build_guide(lang: str):
+    en = lang == "en"
+
+    # ── Overview ──────────────────────────────────────────────────────────────
+    overview = _gsec(
+        "Overview" if en else "서비스 개요",
+        html.P(
+            "WhaleTracker AI monitors 13F filings from top institutional investors "
+            "(Whales) and translates Smart Money movements into actionable signals "
+            "and portfolio recommendations."
+            if en else
+            "WhaleTracker AI는 대형 기관 투자자(Whale)의 SEC 13F 공시를 분석해 "
+            "스마트머니의 움직임을 신호와 포트폴리오 추천으로 변환합니다.",
+            className="grow-desc",
+        ),
+    )
+
+    # ── Tracked Whales ────────────────────────────────────────────────────────
+    whales = _gsec(
+        "Tracked Institutions" if en else "추적 기관",
+        _whale_row("Berkshire Hathaway",    "Warren Buffett"),
+        _whale_row("Bridgewater Associates","Ray Dalio"),
+        _whale_row("Appaloosa Management",  "David Tepper"),
+        _whale_row("Pershing Square",       "Bill Ackman"),
+        _whale_row("Tiger Global",          "Chase Coleman"),
+    )
+
+    # ── Signal Definitions ────────────────────────────────────────────────────
+    signals = _gsec(
+        "Signal Definitions" if en else "신호 정의",
+        _grow("AGG. BUY",    f"#{C['green']}", "+4 pts",
+              ("Share count increased >20% QoQ — the strongest conviction signal."
+               if en else "전 분기 대비 보유 주식 수 20% 초과 증가 — 가장 강한 매수 신호.")),
+        _grow("NEW ENTRY",   f"#{C['blue']}",  "+3 pts",
+              ("Stock was absent from the prior quarter's filing — fresh position."
+               if en else "이전 분기 공시에 없던 종목 — 신규 진입 포지션.")),
+        _grow("HIGH CONC",   f"#{C['amber']}", "+2 pts",
+              ("Position exceeds 5% of the Whale's total portfolio value."
+               if en else "해당 종목이 Whale 포트폴리오의 5% 이상을 차지.")),
+        _grow("HOLD",        "#4A5568",        "+0 pts",
+              ("No significant change detected from the prior quarter."
+               if en else "전 분기 대비 유의미한 변화 없음.")),
+    )
+
+    # ── Recommendation Levels ─────────────────────────────────────────────────
+    recs = _gsec(
+        "Recommendation Levels" if en else "추천 등급",
+        _grow("🚀 STRONG BUY", f"#{C['green']}", "score ≥ 6  or  ≥ 4 with 2+ Whales",
+              ("Highest institutional conviction — multiple Whales agree."
+               if en else "최고 기관 확신도 — 복수 Whale이 동의한 종목.")),
+        _grow("↑ BUY",         "#1DB954",        "score ≥ 3",
+              ("Strong single-Whale signal worth watching."
+               if en else "단일 Whale의 강한 신호 — 주목할 만한 종목.")),
+        _grow("→ HOLD",        f"#{C['amber']}", "score ≥ 1",
+              ("Mild institutional interest — monitor but don't rush."
+               if en else "낮은 기관 관심도 — 모니터링 유지.")),
+        _grow("↓ SELL",        f"#{C['red']}",   "score = 0",
+              ("No institutional backing detected in this filing cycle."
+               if en else "해당 공시 주기에 기관 지지 없음.")),
+    )
+
+    # ── How to use each tab ───────────────────────────────────────────────────
+    tabs_guide = _gsec(
+        "How to Use Each Tab" if en else "탭별 사용법",
+        _gtab("🌊", "Whale Heatmap",
+              ("View holdings for each institution sorted by signal strength. "
+               "The Sector Rotation bar chart shows net institutional inflows by sector."
+               if en else
+               "각 기관의 보유 종목을 신호 강도별로 확인합니다. "
+               "섹터 로테이션 차트는 섹터별 기관 순유입량을 보여줍니다.")),
+        _gtab("💡", "Recommendations",
+              ("Filter by recommendation type (ALL / STRONG BUY / BUY / HOLD / SELL). "
+               "The conviction bar shows score out of a 12-point maximum."
+               if en else
+               "추천 유형(전체 / STRONG BUY / BUY / HOLD / SELL)으로 필터링합니다. "
+               "컨빅션 바는 최대 12점 기준 점수를 나타냅니다.")),
+        _gtab("📊", "My Portfolio",
+              ("Compare your current sector weights against Whale-adjusted targets. "
+               "Sectors drifting more than 5pp trigger a rebalancing suggestion."
+               if en else
+               "현재 섹터 비중을 Whale 신호가 반영된 목표 비중과 비교합니다. "
+               "5%p 이상 이탈한 섹터는 리밸런싱 제안이 표시됩니다.")),
+    )
+
+    # ── Important Notes ───────────────────────────────────────────────────────
+    notes = _gsec(
+        "Important Notes" if en else "주요 참고사항",
+        html.Ul([
+            html.Li("13F filings have a ~45-day reporting lag after quarter end."
+                    if en else "13F 공시는 분기 종료 후 약 45일의 보고 지연이 있습니다."),
+            html.Li("MOCK MODE displays sample data — set DATA_MODE=live in .env for real data."
+                    if en else "MOCK 모드는 샘플 데이터를 표시합니다. 실시간 데이터는 .env에서 DATA_MODE=live로 변경하세요."),
+            html.Li("Edit my_portfolio.json to reflect your actual holdings."
+                    if en else "my_portfolio.json을 편집해 실제 보유 종목을 입력하세요."),
+            html.Li("Conviction score max = 12 (AGGRESSIVE_BUY × 3 whales)."
+                    if en else "컨빅션 최대점수 = 12점 (AGGRESSIVE_BUY × 3 Whale)."),
+        ], className="guide-notes"),
+    )
+
+    return html.Div([overview, whales, signals, recs, tabs_guide, notes],
+                    className="guide-body")
+
+
+def build_modal():
+    return html.Div([
+        html.Div([
+            # Modal header
+            html.Div([
+                html.Div([
+                    html.Span("📖", style={"marginRight": "8px"}),
+                    "User Guide",
+                ], className="modal-title"),
+                html.Button("✕", id="modal-close", className="modal-close",
+                            n_clicks=0),
+            ], className="modal-header"),
+
+            # Language toggle
+            dcc.Tabs(id="guide-lang", value="en", className="lang-tabs", children=[
+                dcc.Tab(label="English", value="en",
+                        className="lang-tab", selected_className="lang-tab-active"),
+                dcc.Tab(label="한국어",   value="ko",
+                        className="lang-tab", selected_className="lang-tab-active"),
+            ]),
+
+            # Guide content (rendered by callback)
+            html.Div(id="guide-content", className="guide-scroll"),
+
+        ], className="modal-box"),
+    ], id="guide-modal", className="modal-overlay", style={"display": "none"})
+
+
 # ── APP ────────────────────────────────────────────────────────────────────────
 app = Dash(
     __name__,
@@ -473,6 +651,7 @@ app.layout = html.Div([
                       style={"background": f"#{mode_color}18", "color": f"#{mode_color}",
                              "border": f"1px solid #{mode_color}44"}),
             html.Span(timestamp, className="timestamp"),
+            html.Button("📖 Guide", id="guide-btn", className="guide-btn", n_clicks=0),
         ], className="header-right"),
     ], className="header"),
 
@@ -495,6 +674,9 @@ app.layout = html.Div([
     ]),
 
     html.Div(id="tab-content", style={"paddingTop": "1.2rem"}),
+
+    # Guide Modal
+    build_modal(),
 
 ], className="app-shell")
 
@@ -530,6 +712,21 @@ def render_tab(tab: str):
 @app.callback(Output("rec-cards", "children"), Input("rec-filter", "value"))
 def update_rec_cards(filter_val: str):
     return build_rec_cards(filter_val)
+
+
+@app.callback(
+    Output("guide-modal", "style"),
+    Input("guide-btn",   "n_clicks"),
+    Input("modal-close", "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_modal(_open, _close):
+    return {"display": "flex"} if ctx.triggered_id == "guide-btn" else {"display": "none"}
+
+
+@app.callback(Output("guide-content", "children"), Input("guide-lang", "value"))
+def render_guide(lang: str):
+    return build_guide(lang)
 
 
 if __name__ == "__main__":

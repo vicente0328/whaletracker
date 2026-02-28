@@ -234,6 +234,189 @@ details[open] .expander-summary { border-radius: 10px 10px 0 0; }
 /* ── Plotly containers ── */
 .js-plotly-plot { background: transparent !important; }
 
+/* ── Guide Button ── */
+.guide-btn {
+    background: #1E2130;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 8px;
+    color: #E8ECF0;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+.guide-btn:hover {
+    background: #262d40;
+    border-color: #4B7BE5;
+    color: #fff;
+}
+
+/* ── Guide Modal ── */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+.modal-box {
+    background: #161922;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 18px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    overflow: hidden;
+}
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 1.4rem;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    flex-shrink: 0;
+}
+.modal-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #E8ECF0;
+    display: flex;
+    align-items: center;
+}
+.modal-close {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 8px;
+    color: #8892A4;
+    font-size: 0.95rem;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.15s ease;
+}
+.modal-close:hover { background: rgba(255,71,87,0.15); color: #FF4757; border-color: #FF475755; }
+
+/* ── Language Toggle (inside modal) ── */
+.lang-tabs {
+    background: #1E2130 !important;
+    border-radius: 0 !important;
+    padding: 8px 1.4rem !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+    display: flex !important;
+    gap: 6px !important;
+    width: auto !important;
+    flex-shrink: 0;
+}
+.lang-tab {
+    background: transparent !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 6px !important;
+    color: #8892A4 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    padding: 4px 14px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+.lang-tab:hover { color: #E8ECF0 !important; }
+.lang-tab-active {
+    background: #4B7BE522 !important;
+    border-color: #4B7BE5 !important;
+    color: #E8ECF0 !important;
+    font-weight: 600 !important;
+}
+
+/* ── Guide Scroll Area ── */
+.guide-scroll {
+    overflow-y: auto;
+    flex: 1;
+    padding: 1.2rem 1.4rem 1.4rem;
+}
+.guide-body { display: flex; flex-direction: column; gap: 1.2rem; }
+
+/* ── Guide Sections ── */
+.gsec {
+    background: #1E2130;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+}
+.gsec-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #4B7BE5;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 0.7rem;
+}
+.gsec p { margin: 0; }
+
+/* ── Guide Rows (signals / recommendations) ── */
+.grow {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.grow:last-child { border-bottom: none; }
+.grow-desc {
+    font-size: 0.78rem;
+    color: #8892A4;
+    line-height: 1.55;
+    margin: 0;
+}
+
+/* ── Whale Rows ── */
+.gwhale-row {
+    display: flex;
+    align-items: center;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.gwhale-row:last-child { border-bottom: none; }
+.gwhale-name { font-size: 0.84rem; font-weight: 600; color: #E8ECF0; }
+.gwhale-mgr  { font-size: 0.71rem; color: #8892A4; margin-top: 1px; }
+
+/* ── Tab Guide Rows ── */
+.gtab-row {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.gtab-row:last-child { border-bottom: none; }
+.gtab-title {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #E8ECF0;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+}
+
+/* ── Guide Notes List ── */
+.guide-notes {
+    margin: 0.3rem 0 0;
+    padding-left: 1.2rem;
+    color: #8892A4;
+    font-size: 0.78rem;
+    line-height: 1.7;
+}
+.guide-notes li { margin-bottom: 2px; }
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
     .kpi-strip { grid-template-columns: repeat(2, 1fr); }
