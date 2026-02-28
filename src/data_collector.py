@@ -591,14 +591,13 @@ def _parse_13dg_document(
 
 
 # ---------------------------------------------------------------------------
-# Form 4 — live via FMP insider-trading endpoint
+# Form 4 — FMP (primary) with fast-fail → EDGAR EFTS fallback
 # ---------------------------------------------------------------------------
 
 def _fetch_fmp_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """Fetch Form 4 insider transactions via FMP for each ticker."""
+    """Fetch Form 4 via FMP; on first 403 immediately fall back to EDGAR."""
     if not FMP_API_KEY:
-        logger.warning("FMP_API_KEY not set — Form 4 skipped.")
-        return {}
+        return _fetch_edgar_form4(tickers)
 
     results: dict[str, list[dict]] = {}
     cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
@@ -610,6 +609,10 @@ def _fetch_fmp_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
                 f"?symbol={ticker}&page=0&apikey={FMP_API_KEY}"
             )
             resp = requests.get(url, timeout=15)
+            if resp.status_code == 403:
+                # Plan restriction — stop querying FMP and switch to EDGAR
+                logger.info("FMP plan excludes insider-trading — using EDGAR Form 4 fallback.")
+                return _fetch_edgar_form4(tickers)
             resp.raise_for_status()
             raw = resp.json()
             if not isinstance(raw, list):
@@ -619,24 +622,19 @@ def _fetch_fmp_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
             for tx in raw:
                 filing_date = tx.get("filingDate", "")
                 if filing_date < cutoff:
-                    break   # Results are date-sorted newest-first
-
+                    break
                 tx_type = tx.get("transactionType", "")
                 if "P-Purchase" in tx_type or tx_type == "P":
                     signal = "INSIDER_BUY"
                 elif "S-Sale" in tx_type or tx_type == "S":
                     signal = "INSIDER_SELL"
                 else:
-                    continue    # Skip options exercises, gifts, etc.
-
+                    continue
                 shares = abs(int(tx.get("securitiesTransacted", 0) or 0))
                 price  = float(tx.get("price", 0) or 0)
-
-                # Clean up role string from FMP format "officer: Chief Executive Officer"
                 raw_role = tx.get("typeOfOwner", "") or ""
                 role = re.sub(r"^(officer|director):\s*", "", raw_role, flags=re.I).strip()
                 role = role.title() if role else "Insider"
-
                 txs.append({
                     "insider":          tx.get("reportingName", "Unknown"),
                     "role":             role,
@@ -647,17 +645,154 @@ def _fetch_fmp_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
                     "filed_date":       filing_date,
                     "signal":           signal,
                 })
-
-                if len(txs) >= 5:   # Cap at 5 per ticker to avoid noise
+                if len(txs) >= 5:
                     break
-
             if txs:
                 results[ticker] = txs
-
         except Exception as exc:
             logger.warning("Form 4 skip %s: %s", ticker, exc)
 
     return results
+
+
+def _fetch_edgar_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """Fetch Form 4 insider transactions from EDGAR (free, no key required).
+
+    Uses EDGAR EFTS full-text search to find recent Form 4 filings by issuer
+    ticker, then parses the XML for open-market purchases and sales.
+    Capped at 8 tickers to stay within EDGAR rate limits.
+    """
+    results: dict[str, list[dict]] = {}
+    cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+
+    for ticker in tickers[:8]:
+        try:
+            search = requests.get(
+                "https://efts.sec.gov/LATEST/search-index",
+                params={
+                    "q":         f'"{ticker}"',
+                    "forms":     "4",
+                    "dateRange": "custom",
+                    "startdt":   cutoff,
+                },
+                headers=_EDGAR_HEADERS,
+                timeout=12,
+            )
+            if not search.ok:
+                continue
+            hits = search.json().get("hits", {}).get("hits", [])
+
+            txs: list[dict] = []
+            for hit in hits[:3]:
+                src       = hit.get("_source", {})
+                acc       = src.get("accession_no", "")
+                entity_id = src.get("entity_id", "")
+                if not acc or not entity_id:
+                    continue
+                parsed = _parse_edgar_form4(int(entity_id), acc, ticker)
+                txs.extend(parsed)
+                if len(txs) >= 5:
+                    break
+
+            if txs:
+                results[ticker] = txs[:5]
+
+        except Exception as exc:
+            logger.debug("EDGAR Form 4 skip %s: %s", ticker, exc)
+
+    return results
+
+
+def _parse_edgar_form4(
+    reporter_cik: int, acc: str, target_ticker: str
+) -> list[dict[str, Any]]:
+    """Download and parse one Form 4 filing from EDGAR archives."""
+    try:
+        acc_clean = acc.replace("-", "")
+        base      = f"https://www.sec.gov/Archives/edgar/data/{reporter_cik}/{acc_clean}"
+
+        # Find the XML document via the filing index
+        idx = requests.get(f"{base}/{acc}-index.htm", headers=_EDGAR_HEADERS, timeout=10)
+        if not idx.ok:
+            return []
+        xml_links = re.findall(
+            r'href="(/Archives/edgar/data/\d+/\d+/[^/"]+\.xml)"',
+            idx.text, re.IGNORECASE,
+        )
+        if not xml_links:
+            return []
+
+        xml_resp = requests.get(
+            f"https://www.sec.gov{xml_links[0]}", headers=_EDGAR_HEADERS, timeout=15
+        )
+        if not xml_resp.ok:
+            return []
+
+        root = _parse_xml_root(xml_resp.content, xml_resp.text)
+        if root is None:
+            return []
+
+        # Confirm this Form 4 is for our target issuer
+        sym_el = root.find(".//{*}issuerTradingSymbol")
+        if sym_el is None or (sym_el.text or "").strip().upper() != target_ticker.upper():
+            return []
+
+        name_el  = root.find(".//{*}rptOwnerName")
+        role_el  = root.find(".//{*}officerTitle")
+        is_dir   = root.find(".//{*}isDirector")
+        reporter = (name_el.text or "Insider").strip().title() if name_el is not None else "Insider"
+        if role_el is not None and role_el.text:
+            role = role_el.text.strip().title()
+        elif is_dir is not None and (is_dir.text or "").strip() == "1":
+            role = "Director"
+        else:
+            role = "Insider"
+
+        txs: list[dict] = []
+        for tx in root.findall(".//{*}nonDerivativeTransaction"):
+            date_el   = tx.find(".//{*}transactionDate//{*}value")
+            shares_el = tx.find(".//{*}transactionShares//{*}value")
+            price_el  = tx.find(".//{*}transactionPricePerShare//{*}value")
+            code_el   = tx.find(".//{*}transactionAcquiredDisposedCode//{*}value")
+
+            # Fallback: some filers omit nested <value>
+            if date_el   is None: date_el   = tx.find(".//{*}transactionDate")
+            if shares_el is None: shares_el = tx.find(".//{*}transactionShares")
+            if price_el  is None: price_el  = tx.find(".//{*}transactionPricePerShare")
+            if code_el   is None: code_el   = tx.find(".//{*}transactionAcquiredDisposedCode")
+
+            if shares_el is None or code_el is None:
+                continue
+            code = (code_el.text or "").strip().upper()
+            signal = "INSIDER_BUY" if code == "A" else ("INSIDER_SELL" if code == "D" else "")
+            if not signal:
+                continue
+
+            try:
+                shares    = abs(int(float(shares_el.text or 0)))
+                price     = float(price_el.text or 0) if price_el is not None else 0.0
+                filed_date = (date_el.text or "").strip()[:10] if date_el is not None else ""
+            except (ValueError, TypeError):
+                continue
+
+            txs.append({
+                "insider":          reporter,
+                "role":             role,
+                "transaction_type": "Purchase" if signal == "INSIDER_BUY" else "Sale",
+                "shares":           shares,
+                "price":            price,
+                "value_usd":        shares * price,
+                "filed_date":       filed_date,
+                "signal":           signal,
+            })
+            if len(txs) >= 3:
+                break
+
+        return txs
+
+    except Exception as exc:
+        logger.debug("Form 4 parse error acc=%s: %s", acc, exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
