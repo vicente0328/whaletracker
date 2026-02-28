@@ -1118,6 +1118,482 @@ def build_guide(lang: str):
     )
 
 
+def _bsec(title: str, *children):
+    """Beginner guide section — same layout as _gsec but teal title."""
+    return html.Div([
+        html.Div(title, className="gsec-title", style={"color": "#20B2AA"}),
+        *children,
+    ], className="gsec")
+
+
+def build_beginner_guide(lang: str) -> html.Div:
+    """Jargon-free guide for stock market newcomers. EN + KO."""
+    en = lang == "en"
+    T = "#20B2AA"   # teal accent for beginner guide
+
+    # ── 1. What is WhaleTracker? ──────────────────────────────────────────────
+    intro = _bsec(
+        "What is WhaleTracker AI?" if en else "월트래커 AI가 뭐예요?",
+        html.P(
+            "Imagine you could see exactly what the world's smartest, best-funded investors "
+            "are buying and selling — before most people even notice. That's WhaleTracker. "
+            "In the US, large investment funds are legally required to report their stock trades "
+            "to the government. WhaleTracker reads those reports automatically and shows you "
+            "the key signals in plain English."
+            if en else
+            "세계에서 가장 똑똑하고 자금력 있는 투자자들이 무엇을 사고 파는지 "
+            "미리 알 수 있다면 어떨까요? 그게 바로 월트래커입니다. "
+            "미국에서는 대형 투자펀드가 자신의 주식 거래 내역을 정부에 의무적으로 보고해야 합니다. "
+            "월트래커는 그 보고서를 자동으로 읽어 핵심 신호를 쉽게 보여줍니다.",
+            className="grow-desc",
+        ),
+        html.Div([
+            html.Span("🐳", style={"fontSize": "1.5rem", "marginRight": "10px"}),
+            html.Div([
+                html.Div(
+                    "Think of it like this:" if en else "이렇게 생각해보세요:",
+                    style={"fontWeight": "700", "fontSize": "0.8rem",
+                           "color": f"#{C['text']}", "marginBottom": "3px"},
+                ),
+                html.Div(
+                    "When the world's top chefs all order the same ingredient, "
+                    "you know something delicious is coming. When the world's top investors "
+                    "all pile into the same stock — that's a signal worth paying attention to."
+                    if en else
+                    "세계 최고의 셰프들이 모두 같은 재료를 주문하기 시작하면 "
+                    "뭔가 맛있는 게 나올 거라는 걸 알 수 있죠. "
+                    "최고의 투자자들이 같은 주식을 사들일 때 — 그게 바로 주목할 신호입니다.",
+                    className="grow-desc",
+                ),
+            ]),
+        ], style={
+            "background": f"{T}0D", "borderRadius": "8px",
+            "padding": "10px 14px", "marginTop": "0.7rem",
+            "border": f"1px solid {T}33", "display": "flex", "alignItems": "flex-start",
+        }),
+    )
+
+    # ── 2. Who are the Whales? ────────────────────────────────────────────────
+    whale_descs = {
+        "en": {
+            "Berkshire Hathaway":    "Warren Buffett · The most famous investor alive. Focuses on great companies at fair prices.",
+            "Bridgewater Associates":"Ray Dalio · World's largest hedge fund. Specialises in global macro trends.",
+            "Pershing Square":       "Bill Ackman · Known for high-conviction bets and activist campaigns.",
+            "Appaloosa Management":  "David Tepper · A master at buying distressed assets when others panic.",
+            "Tiger Global":          "Chase Coleman · One of the best tech-focused growth investors.",
+        },
+        "ko": {
+            "Berkshire Hathaway":    "워런 버핏 · 살아있는 전설의 투자자. 좋은 기업을 적정 가격에 사는 방식.",
+            "Bridgewater Associates":"레이 달리오 · 세계 최대 헤지펀드. 글로벌 거시경제 트렌드 전문.",
+            "Pershing Square":       "빌 애크먼 · 강한 확신 베팅과 행동주의 캠페인으로 유명.",
+            "Appaloosa Management":  "데이비드 테퍼 · 공황 상태에서 부실자산을 매수하는 달인.",
+            "Tiger Global":          "체이스 콜먼 · 최고의 기술주 성장 투자자 중 한 명.",
+        },
+    }
+    wl = whale_descs["en" if en else "ko"]
+
+    whales = _bsec(
+        "Who are the Whales?" if en else "고래(Whale)란 누구인가요?",
+        html.P(
+            "A 'Whale' is Wall Street slang for a huge institutional investor — someone whose "
+            "trades are so large they make waves in the market. WhaleTracker follows 5 of the "
+            "most influential ones:"
+            if en else
+            "'고래(Whale)'는 월스트리트 용어로 시장을 움직일 만큼 거대한 기관 투자자를 말합니다. "
+            "월트래커는 가장 영향력 있는 5곳을 추적합니다:",
+            className="grow-desc", style={"marginBottom": "0.6rem"},
+        ),
+        *[html.Div([
+            html.Div([
+                html.Span("🐋", style={"marginRight": "8px"}),
+                html.Div([
+                    html.Div(name, className="gwhale-name"),
+                    html.Div(desc, className="gwhale-mgr"),
+                ]),
+            ], style={"display": "flex", "alignItems": "flex-start"}),
+        ], className="gwhale-row") for name, desc in wl.items()],
+    )
+
+    # ── 3. How does the government help? (Filing types) ───────────────────────
+    def _filing_row(icon, name, lag_label, lag_color, analogy):
+        return html.Div([
+            html.Div([
+                html.Span(icon, style={"marginRight": "6px", "fontSize": "1rem"}),
+                html.Span(name, style={"fontWeight": "700", "fontSize": "0.78rem",
+                                        "color": f"#{C['text']}"}),
+                html.Span(lag_label, style={
+                    "background": f"{lag_color}18", "color": lag_color,
+                    "border": f"1px solid {lag_color}44", "borderRadius": "4px",
+                    "padding": "1px 7px", "fontSize": "0.58rem", "fontWeight": "700",
+                    "marginLeft": "8px",
+                }),
+            ], style={"display": "flex", "alignItems": "center",
+                      "flexWrap": "wrap", "gap": "4px", "marginBottom": "3px"}),
+            html.Div(analogy, className="grow-desc"),
+        ], className="grow")
+
+    filings_intro = (
+        "In the US, investment funds must file public reports with the SEC "
+        "(Securities and Exchange Commission — the government's financial watchdog). "
+        "Think of these filings like required homework: funds must show exactly what they own. "
+        "There are 4 types, each with a different speed:"
+        if en else
+        "미국에서 투자펀드는 SEC(증권거래위원회 — 정부의 금융 감시기관)에 공개 보고서를 제출해야 합니다. "
+        "이 공시는 일종의 '의무 숙제'입니다: 펀드가 무엇을 보유하고 있는지 공개해야 하죠. "
+        "4가지 종류가 있으며, 각각 속도가 다릅니다:"
+    )
+
+    filings = _bsec(
+        "How Does the Government Help?" if en else "정부가 어떻게 도움이 되나요?",
+        html.P(filings_intro, className="grow-desc", style={"marginBottom": "0.7rem"}),
+        _filing_row("👤", "Form 4",
+                    ("⚡ 2 days" if en else "⚡ 2영업일"),
+                    f"#{C['green']}",
+                    ("A company executive (CEO, CFO…) buys or sells their own company's stock. "
+                     "They MUST report it to the government within 2 business days. "
+                     "It's like a receipt you're forced to make public."
+                     if en else
+                     "회사 임원(CEO, CFO 등)이 자사주를 매수·매도하면 "
+                     "2영업일 이내에 정부에 반드시 보고해야 합니다. "
+                     "강제로 공개해야 하는 영수증 같은 것입니다.")),
+        _filing_row("📋", "SC 13D / 13G",
+                    ("5–10 days" if en else "5–10영업일"),
+                    f"#{C['red']}",
+                    ("When any investor buys 5% or more of a company, they must disclose it within "
+                     "5–10 days. 13D = they want to influence management (activist). "
+                     "13G = passive, just a big investment."
+                     if en else
+                     "어떤 투자자든 회사 지분의 5% 이상을 매수하면 "
+                     "5~10영업일 이내에 공시해야 합니다. "
+                     "13D = 경영에 개입할 의도(행동주의). 13G = 수동적 대규모 투자.")),
+        _filing_row("📦", ("N-PORT" if en else "N-PORT"),
+                    ("Monthly" if en else "월간"),
+                    "#20B2AA",
+                    ("Mutual funds (like Vanguard, BlackRock) report their entire portfolio "
+                     "every month. It's like a monthly inventory — you see what they added "
+                     "or reduced before the quarterly report comes out."
+                     if en else
+                     "뮤추얼 펀드(뱅가드, 블랙록 등)는 매달 전체 포트폴리오를 보고합니다. "
+                     "마치 월간 재고 목록 같아서, 분기 보고서가 나오기 전에 "
+                     "무엇을 추가하거나 줄였는지 미리 볼 수 있습니다.")),
+        _filing_row("🐋", "13F-HR",
+                    ("Quarterly · 45 days" if en else "분기 · 45일"),
+                    f"#{C['blue']}",
+                    ("Every big fund (over $100M) must publish ALL their stock holdings "
+                     "45 days after each quarter ends. This is the main report — but it's slow. "
+                     "The other 3 above help you see moves BEFORE this comes out."
+                     if en else
+                     "1억 달러 이상 대형 펀드는 분기 종료 후 45일 이내에 모든 주식 보유 내역을 "
+                     "공개해야 합니다. 이게 핵심 보고서지만 느립니다. "
+                     "위의 3가지를 활용해 이 보고서가 나오기 전에 움직임을 파악하세요.")),
+    )
+
+    # ── 4. What do the signals mean? ─────────────────────────────────────────
+    def _sig_grp(txt):
+        return html.Div(txt, style={
+            "fontSize": "0.58rem", "fontWeight": "700", "color": T,
+            "letterSpacing": "0.6px", "textTransform": "uppercase",
+            "marginTop": "0.6rem", "marginBottom": "0.2rem",
+            "paddingBottom": "3px", "borderBottom": f"1px solid {T}33",
+        })
+
+    signals = _bsec(
+        "What Do the Signals Mean?" if en else "신호가 무슨 의미인가요?",
+        html.P(
+            "Each signal is a one-line summary of what a fund or insider did. "
+            "WhaleTracker detects them automatically from the filing data."
+            if en else
+            "각 신호는 펀드나 내부자가 무엇을 했는지 한 줄로 요약한 것입니다. "
+            "월트래커가 공시 데이터에서 자동으로 감지합니다.",
+            className="grow-desc", style={"marginBottom": "0.5rem"},
+        ),
+        # 13F group
+        _sig_grp("🐋 13F signals — Quarterly whale moves" if en else "🐋 13F 신호 — 분기 Whale 움직임"),
+        _grow("NEW ENTRY",   f"#{C['blue']}",  "+3 pts",
+              ("The fund bought this stock for the very first time this quarter. "
+               "Like a pro chef suddenly ordering an ingredient they've never used — worth noticing."
+               if en else
+               "이 펀드가 이번 분기에 처음으로 이 주식을 매수했습니다. "
+               "프로 셰프가 전혀 쓰지 않던 재료를 갑자기 주문하는 것처럼 — 주목할 만합니다.")),
+        _grow("AGG. BUY",   f"#{C['green']}", "+4 pts",
+              ("The fund already owned this stock and just bought 20%+ MORE. "
+               "They're doubling down because they're very confident."
+               if en else
+               "이미 보유 중인 주식을 이번 분기에 20% 이상 추가 매수했습니다. "
+               "자신감이 매우 높아 베팅을 늘리는 것입니다.")),
+        _grow("HIGH CONC",  f"#{C['amber']}", "+2 pts",
+              ("This stock makes up more than 5% of the entire fund's portfolio. "
+               "They've put a big chunk of their chips on this one."
+               if en else
+               "이 주식이 펀드 전체 포트폴리오의 5% 이상을 차지합니다. "
+               "이 종목에 큰 비중을 걸고 있다는 뜻입니다.")),
+        # 13D/G group
+        _sig_grp("📋 13D/G signals — Ownership disclosures" if en else "📋 13D/G 신호 — 지분 공시"),
+        _grow("ACTIVIST",   f"#{C['red']}",   "+5 pts",
+              ("An investor bought 5%+ AND filed a 13D saying they want to change how "
+               "the company is run — new management, sell off divisions, etc. "
+               "The strongest signal in the system. Big changes often follow."
+               if en else
+               "투자자가 5% 이상 취득하고 경영에 개입할 의도를 13D로 공시했습니다 — "
+               "새 경영진, 사업부 매각 등. 시스템에서 가장 강력한 신호입니다. 큰 변화가 따르는 경우가 많습니다.")),
+        _grow("13G STAKE",  f"#{C['purple']}", "+2 pts",
+              ("An investor quietly owns 5%+ but is NOT trying to interfere — "
+               "they just see it as a great investment. Still a meaningful signal of institutional interest."
+               if en else
+               "투자자가 조용히 5% 이상 보유하고 있지만 경영 간섭 의도는 없습니다 — "
+               "단순히 좋은 투자처로 보는 것입니다. 그래도 기관의 관심을 보여주는 의미 있는 신호입니다.")),
+        # Form 4 group
+        _sig_grp("👤 Form 4 signals — Insider trades" if en else "👤 Form 4 신호 — 내부자 거래"),
+        _grow("INSIDER BUY", f"#{C['green']}", "+3 pts",
+              ("The company's own CEO, CFO, or director bought stock with their PERSONAL money. "
+               "Insiders know their company better than anyone — "
+               "they only risk their own cash when they're genuinely confident."
+               if en else
+               "회사의 CEO, CFO, 이사가 자신의 개인 돈으로 자사주를 매수했습니다. "
+               "내부자는 회사를 누구보다 잘 압니다 — "
+               "진짜 확신이 있을 때만 자기 돈을 걸죠.")),
+        _grow("INSIDER SELL", f"#{C['red']}",  "−2 pts",
+              ("An insider sold shares. BUT — this can happen for many normal reasons "
+               "(paying taxes, buying a house, portfolio diversification). "
+               "Only treat it as a warning if MULTIPLE insiders sell at the same time."
+               if en else
+               "내부자가 주식을 매도했습니다. 하지만 — 세금 납부, 집 구입, "
+               "포트폴리오 분산 등 일반적인 이유로 매도하는 경우도 많습니다. "
+               "여러 내부자가 동시에 매도할 때만 경고 신호로 해석하세요.")),
+        _grow("10b5-1 SELL", f"#{C['muted']}", "−0.5 pts",
+              ("A pre-planned sale that was scheduled months ago — NOT a reaction to current news. "
+               "Executives often set these plans in advance for tax reasons. "
+               "Usually NOT a bearish signal."
+               if en else
+               "수개월 전에 미리 계획·확정된 매도 — 현재 뉴스에 반응한 것이 아닙니다. "
+               "임원들은 세금 이유로 사전에 이런 계획을 세워두는 경우가 많습니다. "
+               "보통 하락 신호가 아닙니다.")),
+        # N-PORT group
+        _sig_grp("📦 N-PORT signals — Monthly fund moves" if en else "📦 N-PORT 신호 — 월간 펀드 움직임"),
+        _grow("FUND ACCUM",  "#20B2AA",        "+2 pts",
+              ("A mutual fund increased its holdings by 5%+ this month. "
+               "Shows growing fund-level confidence — and you're seeing it weeks before the quarterly 13F."
+               if en else
+               "뮤추얼 펀드가 이번 달 보유량을 5% 이상 늘렸습니다. "
+               "펀드 수준의 확신이 높아지고 있음을 보여줍니다 — "
+               "분기 13F보다 몇 주 먼저 확인할 수 있습니다.")),
+        _grow("FUND SELL",   "#FF8C00",        "−1 pt",
+              ("A mutual fund reduced its holdings by 5%+ this month. "
+               "One month isn't alarming — but if it happens 2-3 months in a row, pay attention."
+               if en else
+               "뮤추얼 펀드가 이번 달 보유량을 5% 이상 줄였습니다. "
+               "한 달은 큰 문제 아니지만 — 2~3개월 연속이면 주목해야 합니다.")),
+    )
+
+    # ── 5. What is the Conviction Score? ─────────────────────────────────────
+    def _score_row(label, range_txt, desc, color):
+        return html.Div([
+            html.Div([
+                html.Span(label, style={
+                    "background": f"{color}18", "color": color,
+                    "border": f"1px solid {color}44", "borderRadius": "5px",
+                    "padding": "2px 9px", "fontSize": "0.68rem", "fontWeight": "700",
+                    "marginRight": "8px", "whiteSpace": "nowrap",
+                }),
+                html.Span(range_txt, style={
+                    "fontSize": "0.65rem", "color": f"#{C['muted']}",
+                    "background": f"#{C['card2']}", "borderRadius": "4px",
+                    "padding": "1px 6px", "fontWeight": "600",
+                }),
+            ], style={"display": "flex", "alignItems": "center", "marginBottom": "3px"}),
+            html.Div(desc, className="grow-desc"),
+        ], className="grow")
+
+    score = _bsec(
+        "What is the Conviction Score?" if en else "컨빅션 점수가 뭐예요?",
+        html.P(
+            "The Conviction Score (0–12) is like a confidence thermometer. "
+            "It adds up all the positive signals across all 4 filing types. "
+            "The more signals that agree, the higher the score."
+            if en else
+            "컨빅션 점수(0~12)는 신뢰도 온도계 같은 것입니다. "
+            "4가지 공시 유형에서 발견된 긍정적 신호를 모두 합산합니다. "
+            "더 많은 신호가 일치할수록 점수가 높아집니다.",
+            className="grow-desc", style={"marginBottom": "0.5rem"},
+        ),
+        _score_row(
+            "0 – 3" if en else "0 – 3점",
+            "Mild interest" if en else "낮은 관심",
+            ("One small signal detected. Worth knowing about, but don't rush."
+             if en else "작은 신호 하나 감지. 알아두면 좋지만 서두를 필요는 없습니다."),
+            f"#{C['muted']}",
+        ),
+        _score_row(
+            "4 – 6" if en else "4 – 6점",
+            "Worth watching" if en else "주목할 만함",
+            ("Multiple signals or a strong single source. Add to your watchlist."
+             if en else "여러 신호 또는 강력한 단일 소스. 워치리스트에 추가해 보세요."),
+            f"#{C['amber']}",
+        ),
+        _score_row(
+            "7 – 9" if en else "7 – 9점",
+            "Strong signal" if en else "강한 신호",
+            ("Multiple independent sources agree. High institutional conviction."
+             if en else "여러 독립 소스가 동의합니다. 기관의 확신도가 높습니다."),
+            "#1DB954",
+        ),
+        _score_row(
+            "10 – 12" if en else "10 – 12점",
+            "Exceptional" if en else "매우 강함",
+            ("Rare. Multiple Whales + insider buys + activist filing all align. "
+             "The strongest possible institutional signal."
+             if en else "드문 경우입니다. 복수 Whale + 내부자 매수 + 행동주의 공시 모두 일치. "
+             "가능한 가장 강력한 기관 신호입니다."),
+            f"#{C['green']}",
+        ),
+    )
+
+    # ── 6. 3 Steps to get started ─────────────────────────────────────────────
+    def _step(n, icon, tab, action_en, action_ko):
+        return html.Div([
+            html.Div([
+                html.Div(str(n), style={
+                    "background": f"{T}22", "color": T,
+                    "border": f"1px solid {T}55", "borderRadius": "50%",
+                    "width": "26px", "height": "26px", "flexShrink": "0",
+                    "display": "flex", "alignItems": "center", "justifyContent": "center",
+                    "fontSize": "0.72rem", "fontWeight": "800",
+                }),
+                html.Div([
+                    html.Div([
+                        html.Span(icon, style={"marginRight": "5px"}),
+                        html.Span(tab, style={"fontWeight": "700", "fontSize": "0.8rem",
+                                               "color": f"#{C['text']}"}),
+                    ], style={"marginBottom": "3px"}),
+                    html.Div(action_en if en else action_ko, className="grow-desc"),
+                ]),
+            ], style={"display": "flex", "gap": "10px", "alignItems": "flex-start"}),
+        ], className="grow")
+
+    steps = _bsec(
+        "3 Steps to Get Started" if en else "시작하는 3단계",
+        html.P(
+            "You don't need to understand everything at once. "
+            "Follow these 3 steps to get your first useful insight:"
+            if en else
+            "처음부터 모든 걸 이해할 필요는 없습니다. "
+            "3단계를 따라하면 첫 번째 유용한 인사이트를 얻을 수 있습니다:",
+            className="grow-desc", style={"marginBottom": "0.5rem"},
+        ),
+        _step(1, "🌊", "Whale Heatmap",
+              "Look at the Sector Rotation chart at the top. "
+              "Green bars = sectors where Whales are buying. "
+              "Focus on the sector with the biggest green bar — that's where smart money is flowing.",
+              "상단의 섹터 로테이션 차트를 보세요. "
+              "초록색 막대 = 고래들이 매수하는 섹터. "
+              "가장 큰 초록 막대를 가진 섹터에 집중하세요 — 스마트머니가 흘러들어가는 곳입니다."),
+        _step(2, "💡", "Recommendations",
+              "Click '💡 Recommendations' and filter for 'STRONG BUY'. "
+              "These are stocks where multiple Whales or signals agree. "
+              "Check the conviction score — higher = more sources backing it.",
+              "'💡 추천' 탭을 클릭하고 'STRONG BUY'로 필터링하세요. "
+              "여러 고래나 신호가 동의하는 종목들입니다. "
+              "컨빅션 점수를 확인하세요 — 높을수록 더 많은 소스가 뒷받침합니다."),
+        _step(3, "📊", "My Portfolio",
+              "Go to '📊 My Portfolio'. "
+              "If Whales are heavily buying Tech but your portfolio is light on Tech, "
+              "consider whether to rebalance. The rebalancing cards do this math for you.",
+              "'📊 내 포트폴리오' 탭으로 이동하세요. "
+              "고래들이 기술주를 대거 매수하는데 내 포트폴리오에 기술주 비중이 낮다면, "
+              "리밸런싱을 고려해 보세요. 리밸런싱 카드가 이 계산을 대신해 줍니다."),
+    )
+
+    # ── 7. Glossary ───────────────────────────────────────────────────────────
+    def _gterm(term, defn):
+        return html.Div([
+            html.Span(term + ": ", style={
+                "fontWeight": "700", "fontSize": "0.78rem", "color": T,
+            }),
+            html.Span(defn, className="grow-desc",
+                      style={"fontSize": "0.77rem"}),
+        ], style={"marginBottom": "0.45rem", "lineHeight": "1.5"})
+
+    glossary = _bsec(
+        "Glossary — Key Terms Explained" if en else "용어 사전 — 주요 용어 설명",
+        *([
+            _gterm("Whale",
+                   "A large institutional investor (hedge fund, pension fund) managing billions."),
+            _gterm("SEC",
+                   "Securities and Exchange Commission — the US government body that regulates "
+                   "investment funds and requires public filings."),
+            _gterm("13F",
+                   "A quarterly report that large funds must file with the SEC, "
+                   "showing all their stock holdings."),
+            _gterm("Institutional Investor",
+                   "A professional firm (not an individual) that manages money on behalf of others."),
+            _gterm("Activist Investor",
+                   "An investor who buys a large stake in a company and then tries to change "
+                   "how it's run (new CEO, sell divisions, etc.)."),
+            _gterm("Insider",
+                   "Anyone with non-public information about a company — typically officers "
+                   "and directors (CEO, CFO, board members)."),
+            _gterm("Conviction Score",
+                   "WhaleTracker's 0–12 score that aggregates all positive signals from all "
+                   "4 filing types for a given stock."),
+            _gterm("Sector",
+                   "A category of the economy (Technology, Healthcare, Energy, Financials, etc.). "
+                   "Stocks in the same sector tend to move together."),
+            _gterm("Rebalancing",
+                   "Adjusting your portfolio weights so they match your target allocation — "
+                   "selling what's grown too big, buying what's fallen behind."),
+            _gterm("Signal",
+                   "An automated pattern detected in SEC filings that suggests institutional "
+                   "buying or selling activity."),
+        ] if en else [
+            _gterm("Whale (고래)",
+                   "수십억 달러를 운용하는 대형 기관 투자자(헤지펀드, 연기금 등)."),
+            _gterm("SEC",
+                   "미국 증권거래위원회 — 투자펀드를 규제하고 공개 보고서 제출을 요구하는 정부 기관."),
+            _gterm("13F",
+                   "대형 펀드가 분기마다 SEC에 제출해야 하는 보고서. 모든 주식 보유 내역이 담겨 있습니다."),
+            _gterm("기관 투자자",
+                   "개인이 아닌 타인의 자금을 운용하는 전문 투자 회사."),
+            _gterm("행동주의 투자자",
+                   "회사 지분을 대량 취득한 후 경영진 교체, 사업부 매각 등 경영 변화를 요구하는 투자자."),
+            _gterm("내부자 (Insider)",
+                   "비공개 정보에 접근할 수 있는 사람 — 주로 임원 및 이사(CEO, CFO, 이사회 멤버)."),
+            _gterm("컨빅션 점수",
+                   "4가지 공시 유형의 모든 긍정 신호를 합산한 월트래커의 0~12점 신뢰도 지수."),
+            _gterm("섹터",
+                   "경제의 카테고리(기술, 헬스케어, 에너지, 금융 등). 같은 섹터 주식은 함께 움직이는 경향."),
+            _gterm("리밸런싱",
+                   "목표 비중에 맞게 포트폴리오를 조정하는 것 — 너무 커진 것은 팔고, 줄어든 것은 삽니다."),
+            _gterm("신호 (Signal)",
+                   "SEC 공시에서 자동으로 감지된 기관의 매수 또는 매도 패턴을 나타내는 지표."),
+        ]),
+    )
+
+    # ── 8. Disclaimer ─────────────────────────────────────────────────────────
+    disclaimer = _bsec(
+        "Important Disclaimer" if en else "중요 유의사항",
+        html.Div([
+            html.Div("⚠️", style={"fontSize": "1.4rem", "marginBottom": "6px"}),
+            html.P(
+                "WhaleTracker is a research and information tool — NOT financial advice. "
+                "Institutional investors are brilliant but they are not always right. "
+                "Always do your own research and consider your personal financial situation "
+                "before making any investment decision. Past signals do not guarantee future results."
+                if en else
+                "월트래커는 리서치·정보 제공 도구입니다 — 금융 투자 자문이 아닙니다. "
+                "기관 투자자들은 뛰어나지만 항상 옳지는 않습니다. "
+                "투자 결정을 내리기 전에 반드시 본인만의 조사를 하고 "
+                "개인 재무 상황을 고려하세요. 과거 신호가 미래 수익을 보장하지 않습니다.",
+                className="grow-desc",
+            ),
+        ], style={"textAlign": "center", "padding": "0.5rem 0"}),
+    )
+
+    return html.Div(
+        [intro, whales, filings, signals, score, steps, glossary, disclaimer],
+        className="guide-body",
+    )
+
+
 def build_modal():
     return html.Div([
         html.Div([
@@ -1130,6 +1606,14 @@ def build_modal():
                 html.Button("✕", id="modal-close", className="modal-close",
                             n_clicks=0),
             ], className="modal-header"),
+
+            # Guide mode toggle (Standard / Beginner)
+            dcc.Tabs(id="guide-mode", value="standard", className="lang-tabs", children=[
+                dcc.Tab(label="📖 Standard", value="standard",
+                        className="lang-tab", selected_className="lang-tab-active"),
+                dcc.Tab(label="🔰 Beginner", value="beginner",
+                        className="lang-tab", selected_className="lang-tab-active"),
+            ]),
 
             # Language toggle
             dcc.Tabs(id="guide-lang", value="en", className="lang-tabs", children=[
@@ -1344,8 +1828,14 @@ def toggle_modal(_open, _close):
     return {"display": "flex"} if ctx.triggered_id == "guide-btn" else {"display": "none"}
 
 
-@app.callback(Output("guide-content", "children"), Input("guide-lang", "value"))
-def render_guide(lang: str):
+@app.callback(
+    Output("guide-content", "children"),
+    Input("guide-lang",  "value"),
+    Input("guide-mode",  "value"),
+)
+def render_guide(lang: str, mode: str):
+    if mode == "beginner":
+        return build_beginner_guide(lang)
     return build_guide(lang)
 
 
