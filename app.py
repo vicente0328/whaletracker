@@ -120,13 +120,14 @@ timestamp  = datetime.now().strftime("%b %d, %Y · %H:%M")
 
 # ── PLOTLY HELPERS ─────────────────────────────────────────────────────────────
 def plotly_base(**kwargs) -> dict:
-    return dict(
+    base = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Inter, sans-serif", color=f"#{C['text']}"),
         margin=dict(l=0, r=0, t=36, b=0),
-        **kwargs,
     )
+    base.update(kwargs)
+    return base
 
 
 # ── COMPONENT BUILDERS ─────────────────────────────────────────────────────────
@@ -587,11 +588,13 @@ def build_macro_tab():
             dates  = [o["date"] for o in obs]
             values = [o["value"] for o in obs]
             col = m["color"]
+            r, g, b = int(col[1:3], 16), int(col[3:5], 16), int(col[5:7], 16)
+            fill_rgba = f"rgba({r},{g},{b},0.07)"
             fig = go.Figure(go.Scatter(
                 x=dates, y=values,
                 mode="lines",
                 line=dict(color=col, width=2),
-                fill="tozeroy", fillcolor=f"{col}12",
+                fill="tozeroy", fillcolor=fill_rgba,
                 hovertemplate="<b>%{x}</b><br>%{y:.2f}" + m["unit"] + "<extra></extra>",
             ))
             fig.update_layout(**plotly_base(
