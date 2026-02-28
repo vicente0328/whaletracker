@@ -2174,17 +2174,19 @@ def render_tab(tab: str, auth_data):
     if tab == "tab-port":
         return build_portfolio_tab(auth_data)
     if tab == "tab-macro":
-        # Return skeleton immediately; data is filled by load_macro_content callback
-        return html.Div([
-            # Interval fires once after 50ms → triggers load_macro_content callback
-            dcc.Interval(id="macro-load-trigger", interval=50,
-                         max_intervals=1, n_intervals=0),
-            html.Div(id="macro-content", children=html.Div(
-                "Loading macro data…",
-                style={"color": f"#{C['muted']}", "fontSize": "0.85rem",
-                       "padding": "2rem 0", "textAlign": "center"},
-            )),
-        ])
+        try:
+            return dcc.Loading(
+                build_macro_tab(),
+                type="circle",
+                color=f"#{C['accent']}",
+            )
+        except Exception as exc:
+            logger.error("build_macro_tab failed: %s", exc, exc_info=True)
+            return html.Div(
+                f"Error loading macro data: {exc}",
+                style={"color": f"#{C['red']}", "padding": "2rem",
+                       "fontSize": "0.85rem"},
+            )
 
 
 @app.callback(
@@ -2278,16 +2280,6 @@ def load_news_banner(n_intervals):
         return no_update
     return build_news_banner(fetch_market_news(5))
 
-
-@app.callback(
-    Output("macro-content",      "children"),
-    Input("macro-load-trigger",  "n_intervals"),
-)
-def load_macro_content(n_intervals):
-    """Build the full Macro dashboard after the 50ms Interval fires."""
-    if not n_intervals:
-        return no_update
-    return build_macro_tab()
 
 
 # ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────
