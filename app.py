@@ -54,8 +54,8 @@ insider_summary  = get_insider_sentiment(insiders)
 portfolio        = load_portfolio()
 rebalancing      = suggest_rebalancing(portfolio, rotation)
 current_weights  = get_current_sector_weights(portfolio)
-macro_data       = fetch_macro_indicators()
-market_news      = fetch_market_news(5)
+# NOTE: macro_data and market_news are fetched lazily (on first use)
+# to avoid blocking Railway's health-check during startup.
 
 # ── DESIGN TOKENS ──────────────────────────────────────────────────────────────
 C = {
@@ -537,6 +537,7 @@ def build_rec_cards(filter_val: str = "ALL", watchlist: list | None = None):
 
 def build_macro_tab():
     """📈 Macro Dashboard — FRED economic indicators."""
+    macro_data = fetch_macro_indicators()   # uses 24h cache after first call
     # ── KPI cards row ──────────────────────────────────────────────────────────
     kpi_order = ["fed_rate", "yield_10y", "cpi", "unemployment", "gdp_growth"]
     kpi_cards = []
@@ -2062,8 +2063,8 @@ app.layout = html.Div([
         ], className="header-right"),
     ], className="header"),
 
-    # News banner (between header and KPI strip)
-    build_news_banner(market_news),
+    # News banner (between header and KPI strip) — loaded asynchronously
+    html.Div(id="news-banner"),
 
     # KPI strip
     html.Div([
@@ -2247,6 +2248,15 @@ def render_guide(lang: str, mode: str):
     if mode == "beginner":
         return build_beginner_guide(lang)
     return build_guide(lang)
+
+
+@app.callback(
+    Output("news-banner", "children"),
+    Input("news-banner",  "id"),   # fires once on page load
+)
+def load_news_banner(_):
+    """Fetch market headlines after page load — keeps startup fast."""
+    return build_news_banner(fetch_market_news(5))
 
 
 # ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────
