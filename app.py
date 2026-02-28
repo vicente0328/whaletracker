@@ -856,30 +856,34 @@ def build_portfolio_tab(auth_data=None):
 
     return html.Div([
         editor_section,
-        _build_portfolio_analysis(),
+        html.Div(id="portfolio-analysis-section"),  # filled reactively by callback
     ])
 
 
-def _build_portfolio_analysis():
-    """The existing portfolio charts and rebalancing analysis (reads global data)."""
-    holdings_list  = portfolio.get("holdings", [])
-    target_weights = portfolio.get("target_sector_weights", {})
-    top_sector     = max(current_weights, key=current_weights.get) if current_weights else "—"
+def _build_portfolio_analysis(port_data: dict):
+    """Portfolio charts and rebalancing analysis built from the given portfolio dict."""
+    holdings_list  = port_data.get("holdings", [])
+    target_weights = port_data.get("target_sector_weights", {})
+    curr_weights   = get_current_sector_weights(port_data)
+    pv             = sum(h.get("quantity", 0) * h.get("avg_cost", 0.0)
+                         for h in holdings_list)
+    reb            = suggest_rebalancing(port_data, rotation)  # rotation is a startup global
+    top_sector     = max(curr_weights, key=curr_weights.get) if curr_weights else "—"
 
     # Mini KPIs
     mini_kpis = html.Div([
-        kpi_card("TOTAL VALUE",      f"${port_value:,.0f}",
-                 f"{len(holdings_list)} positions",                           C["blue"]),
-        kpi_card("SECTORS",          str(len(current_weights)),
-                 "GICS sectors covered",                                      C["purple"]),
+        kpi_card("TOTAL VALUE",      f"${pv:,.0f}",
+                 f"{len(holdings_list)} positions",                          C["blue"]),
+        kpi_card("SECTORS",          str(len(curr_weights)),
+                 "GICS sectors covered",                                     C["purple"]),
         kpi_card("DOMINANT SECTOR",  top_sector,
-                 f"{current_weights.get(top_sector, 0):.0%} of portfolio",   C["amber"]),
+                 f"{curr_weights.get(top_sector, 0):.0%} of portfolio",     C["amber"]),
     ], className="grid-3", style={"marginBottom": "1rem"})
 
     # Donut chart
-    if current_weights:
-        labels = list(current_weights.keys())
-        values = [v * 100 for v in current_weights.values()]
+    if curr_weights:
+        labels = list(curr_weights.keys())
+        values = [v * 100 for v in curr_weights.values()]
         fig_donut = go.Figure(go.Pie(
             labels=labels, values=values, hole=0.62,
             marker=dict(colors=PALETTE[:len(labels)],
@@ -894,7 +898,7 @@ def _build_portfolio_analysis():
                        font=dict(size=12, color=f"#{C['muted']}"),
                        x=0.5, xanchor="center"),
             annotations=[dict(
-                text=f"<b>${port_value/1000:.1f}K</b>",
+                text=f"<b>${pv/1000:.1f}K</b>",
                 x=0.5, y=0.5, showarrow=False,
                 font=dict(size=15, color=f"#{C['text']}", family="Inter"),
             )],
@@ -903,9 +907,9 @@ def _build_portfolio_analysis():
         fig_donut = go.Figure()
 
     # Current vs Target grouped bar
-    all_sec   = sorted(set(list(current_weights) + list(target_weights)))
-    curr_vals = [current_weights.get(s, 0) * 100 for s in all_sec]
-    targ_vals = [target_weights.get(s, 0) * 100  for s in all_sec]
+    all_sec   = sorted(set(list(curr_weights) + list(target_weights)))
+    curr_vals = [curr_weights.get(s, 0) * 100  for s in all_sec]
+    targ_vals = [target_weights.get(s, 0) * 100 for s in all_sec]
 
     fig_bar = go.Figure([
         go.Bar(name="Current", x=all_sec, y=curr_vals,
@@ -937,7 +941,7 @@ def _build_portfolio_analysis():
                   style={"fontSize": "0.7rem", "color": f"#{C['muted']}", "marginLeft": "8px"}),
     ], className="section-header")
 
-    if not rebalancing:
+    if not reb:
         reb_content = html.Div(
             "✓  Portfolio is within target weights — no rebalancing needed.",
             className="success-banner",
@@ -945,8 +949,8 @@ def _build_portfolio_analysis():
     else:
         N = 3
         rows = []
-        for i in range(0, len(rebalancing), N):
-            chunk = rebalancing[i:i + N]
+        for i in range(0, len(reb), N):
+            chunk = reb[i:i + N]
             cards = [rebalancing_card(s) for s in chunk]
             while len(cards) < N:
                 cards.append(html.Div())
@@ -977,9 +981,10 @@ def _build_portfolio_analysis():
                     html.Tr([
                         td(h["ticker"],                            bold=True),
                         td(h.get("sector", "—")),
-                        td(f"{h['quantity']:,}",                   right=True),
-                        td(f"${h['avg_cost']:,.2f}",               right=True),
-                        td(f"${h['quantity']*h['avg_cost']:,.0f}", right=True, green=True, bold=True),
+                        td(f"{h.get('quantity',0):,}",             right=True),
+                        td(f"${h.get('avg_cost',0):,.2f}",         right=True),
+                        td(f"${h.get('quantity',0)*h.get('avg_cost',0):,.0f}",
+                           right=True, green=True, bold=True),
                     ], style={"borderBottom": f"1px solid #{C['border']}40"})
                     for h in holdings_list
                 ]),
@@ -2166,7 +2171,12 @@ def render_tab(tab: str, auth_data):
     if tab == "tab-port":
         return build_portfolio_tab(auth_data)
     if tab == "tab-macro":
-        return build_macro_tab()
+        # Return skeleton immediately; data is filled by load_macro_content callback
+        return html.Div(id="macro-content", children=[
+            html.Div("Loading macro data…",
+                     style={"color": f"#{C['muted']}", "fontSize": "0.85rem",
+                            "padding": "2rem 0", "textAlign": "center"}),
+        ])
 
 
 @app.callback(
@@ -2257,6 +2267,15 @@ def render_guide(lang: str, mode: str):
 def load_news_banner(_):
     """Fetch market headlines after page load — keeps startup fast."""
     return build_news_banner(fetch_market_news(5))
+
+
+@app.callback(
+    Output("macro-content", "children"),
+    Input("macro-content",  "id"),   # fires once when the Macro tab is rendered
+)
+def load_macro_content(_):
+    """Build the full Macro dashboard after the tab skeleton appears."""
+    return build_macro_tab()
 
 
 # ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────
@@ -2362,6 +2381,19 @@ def handle_logout(n_clicks):
 
 
 # ── PORTFOLIO EDITOR CALLBACKS ─────────────────────────────────────────────────
+
+@app.callback(
+    Output("portfolio-analysis-section", "children"),
+    Input("portfolio-edit-store", "data"),
+    Input("main-tabs",            "value"),
+)
+def update_portfolio_analysis(store_data, tab):
+    """Re-render portfolio charts whenever the edit store changes or the tab is opened."""
+    if tab != "tab-port":
+        return no_update
+    port_data = store_data if store_data else portfolio  # fall back to file-based data
+    return _build_portfolio_analysis(port_data)
+
 
 @app.callback(
     Output("portfolio-editor-holdings", "children"),
