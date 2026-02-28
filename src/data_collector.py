@@ -21,14 +21,17 @@ Fetches institutional filings and detects signals across four SEC form types:
     - FUND_LIQUIDATION:  Shares decreased vs prior month → -1
 
 Data sources:
-  - Financial Modeling Prep (FMP) API  → set FMP_API_KEY in .env  (13F live)
-  - SEC EDGAR full-text search API     → public, no key required   (13D/G, Form 4, N-PORT live stubs)
-  - Mock data                          → set DATA_MODE=mock in .env
+  - Financial Modeling Prep (FMP) API  → 13F live + Form 4 live  (FMP_API_KEY in .env)
+  - SEC EDGAR public APIs              → 13D/G live + N-PORT live (no key required)
+  - Mock data                          → DATA_MODE=mock in .env
 """
 
 import os
+import re
 import json
 import logging
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -44,10 +47,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 FMP_API_KEY: str = os.getenv("FMP_API_KEY", "")
-DATA_MODE: str = os.getenv("DATA_MODE", "mock")  # "mock" | "live"
+DATA_MODE: str  = os.getenv("DATA_MODE", "mock")   # "mock" | "live"
 CACHE_DIR: Path = Path(__file__).parent.parent / "data"
 
-# Tracked Whales: {display_name: CIK}
+# Tracked Whales: {display_name: CIK (zero-padded 10 digits)}
 TRACKED_WHALES: dict[str, str] = {
     "Berkshire Hathaway":    "0001067983",
     "Bridgewater Associates":"0001350694",
@@ -64,10 +67,16 @@ TRACKED_NPORT_FUNDS: dict[str, str] = {
 }
 
 # Signal thresholds
-AGGRESSIVE_BUY_THRESHOLD    = 0.20  # 20% QoQ share increase
-HIGH_CONCENTRATION_THRESHOLD = 0.05  # 5% of portfolio value
-FUND_ACCUMULATION_THRESHOLD  = 0.05  # 5% month-over-month increase
-FUND_LIQUIDATION_THRESHOLD   = -0.05  # 5% month-over-month decrease
+AGGRESSIVE_BUY_THRESHOLD     = 0.20    # 20% QoQ share increase
+HIGH_CONCENTRATION_THRESHOLD = 0.05    # 5% of portfolio value
+FUND_ACCUMULATION_THRESHOLD  = 0.05    # +5% MoM share increase
+FUND_LIQUIDATION_THRESHOLD   = -0.05   # -5% MoM share decrease
+
+# SEC requires a descriptive User-Agent for all EDGAR API calls
+_EDGAR_HEADERS = {
+    "User-Agent": "WhaleTracker research@whaletracker.ai",
+    "Accept-Encoding": "gzip, deflate",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -89,17 +98,17 @@ def fetch_all_whale_filings() -> dict[str, list[dict[str, Any]]]:
         try:
             results[name] = _fetch_fmp_13f(cik)
         except Exception as exc:
-            logger.error("Failed to fetch 13F for %s: %s", name, exc)
+            logger.error("13F fetch failed for %s: %s", name, exc)
             results[name] = []
     return results
 
 
 def detect_signals(
-    current: list[dict[str, Any]],
+    current:  list[dict[str, Any]],
     previous: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Annotate each holding in `current` with a 13F Whale signal."""
-    prev_map: dict[str, dict] = {h["ticker"]: h for h in previous}
+    prev_map = {h["ticker"]: h for h in previous}
     return [{**h, "signal": _classify_signal(h, prev_map.get(h["ticker"]))}
             for h in current]
 
@@ -112,9 +121,7 @@ def fetch_13dg_filings() -> dict[str, dict[str, Any]]:
     """Return latest SC 13D/G activist/passive stake filings per ticker.
 
     Returns:
-        {ticker: filing_dict}
-        filing_dict keys: form_type, filer, shares, pct_outstanding,
-                          filed_date, signal
+        {ticker: {form_type, filer, shares, pct_outstanding, filed_date, signal}}
     """
     if DATA_MODE == "mock":
         return _mock_13dg()
@@ -129,16 +136,15 @@ def fetch_form4_filings(tickers: list[str] | None = None) -> dict[str, list[dict
     """Return recent Form 4 insider transactions per ticker.
 
     Args:
-        tickers: Optional filter list. None = all tracked tickers.
+        tickers: Tickers to query (from live 13F holdings). None → mock.
 
     Returns:
-        {ticker: [transaction_dict, ...]}
-        transaction_dict keys: insider, role, transaction_type, shares,
-                               price, value_usd, filed_date, signal
+        {ticker: [{insider, role, transaction_type, shares, price,
+                   value_usd, filed_date, signal}]}
     """
     if DATA_MODE == "mock":
         return _mock_form4()
-    return _fetch_edgar_form4(tickers)
+    return _fetch_fmp_form4(tickers or [])
 
 
 # ---------------------------------------------------------------------------
@@ -149,9 +155,8 @@ def fetch_nport_filings() -> dict[str, list[dict[str, Any]]]:
     """Return latest N-PORT monthly holdings for tracked funds.
 
     Returns:
-        {fund_name: [holding_dict, ...]}
-        holding_dict keys: ticker, company, shares, value_usd, portfolio_pct,
-                           change_pct, signal
+        {fund_name: [{ticker, company, shares, value_usd,
+                      portfolio_pct, change_pct, signal}]}
     """
     if DATA_MODE == "mock":
         return _mock_nport()
@@ -165,8 +170,8 @@ def fetch_nport_filings() -> dict[str, list[dict[str, Any]]]:
 def _classify_signal(current: dict[str, Any], previous: dict[str, Any] | None) -> str:
     if previous is None:
         return "NEW_ENTRY"
-    prev_shares  = previous.get("shares", 0)
-    curr_shares  = current.get("shares", 0)
+    prev_shares   = previous.get("shares", 0)
+    curr_shares   = current.get("shares", 0)
     portfolio_pct = current.get("portfolio_pct", 0.0)
     if prev_shares > 0 and (curr_shares - prev_shares) / prev_shares > AGGRESSIVE_BUY_THRESHOLD:
         return "AGGRESSIVE_BUY"
@@ -216,114 +221,383 @@ def _load_mock_data() -> dict[str, list[dict[str, Any]]]:
 
 
 # ---------------------------------------------------------------------------
-# 13D/G internals
+# SC 13D/G — live via EDGAR submissions API
+# ---------------------------------------------------------------------------
+
+def _fetch_edgar_13dg() -> dict[str, dict[str, Any]]:
+    """Scan each whale's EDGAR submissions for SC 13D/G filings."""
+    results: dict[str, dict] = {}
+    for whale_name, cik in TRACKED_WHALES.items():
+        try:
+            filing = _latest_13dg_for_cik(cik, whale_name)
+            if filing:
+                ticker = filing.pop("ticker", "")
+                if ticker and ticker not in results:
+                    results[ticker] = filing
+        except Exception as exc:
+            logger.warning("13D/G skip %s: %s", whale_name, exc)
+    return results
+
+
+def _latest_13dg_for_cik(cik: str, whale_name: str) -> dict[str, Any] | None:
+    """Return the most recent SC 13D or 13G filing for a given whale CIK."""
+    resp = requests.get(
+        f"https://data.sec.gov/submissions/CIK{cik}.json",
+        headers=_EDGAR_HEADERS, timeout=20,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    recent       = data.get("filings", {}).get("recent", {})
+    forms        = recent.get("form", [])
+    acc_nums     = recent.get("accessionNumber", [])
+    dates        = recent.get("filingDate", [])
+    primary_docs = recent.get("primaryDocument", [])
+
+    for i, form_type in enumerate(forms):
+        base_form = form_type.replace("/A", "").strip()
+        if base_form not in ("SC 13D", "SC 13G"):
+            continue
+
+        acc       = acc_nums[i]     if i < len(acc_nums)     else ""
+        date      = dates[i]        if i < len(dates)        else ""
+        prime_doc = primary_docs[i] if i < len(primary_docs) else ""
+        if not acc or not prime_doc:
+            continue
+
+        cik_int   = int(cik)
+        acc_clean = acc.replace("-", "")
+        doc_url   = (f"https://www.sec.gov/Archives/edgar/data/"
+                     f"{cik_int}/{acc_clean}/{prime_doc}")
+
+        parsed = _parse_13dg_document(doc_url, form_type, date, whale_name)
+        if parsed:
+            return parsed
+
+        # Only attempt the most recent 13D/G per whale
+        break
+
+    return None
+
+
+def _parse_13dg_document(
+    doc_url: str, form_type: str, date: str, filer: str
+) -> dict[str, Any] | None:
+    """Fetch an SC 13D/G document and extract subject ticker + ownership %."""
+    try:
+        resp = requests.get(doc_url, headers=_EDGAR_HEADERS, timeout=25)
+        resp.raise_for_status()
+        text = resp.text
+
+        # ── Ticker ──────────────────────────────────────────────────────────
+        # Cover page: "Issuer's Ticker Symbol" / "Ticker Symbol" / "Trading Symbol"
+        ticker_m = re.search(
+            r"(?:issuer'?s?\s+)?ticker(?:\s+or\s+trading)?\s+symbol[^A-Z\n]{0,30}([A-Z]{1,5})\b",
+            text, re.IGNORECASE,
+        )
+        # Fallback: look for CUSIP row then ticker on same line
+        if not ticker_m:
+            ticker_m = re.search(
+                r"\bCUSIP\b[^\n]{0,60}\n[^\n]{0,30}\(([A-Z]{1,5})\)",
+                text, re.IGNORECASE,
+            )
+
+        # ── Percent of class ────────────────────────────────────────────────
+        # Cover page item 11 (13G) or 13 (13D): "Percent of Class"
+        pct_m = re.search(
+            r"[Pp]ercent\s+of\s+[Cc]lass[^0-9]{0,60}(\d{1,3}(?:\.\d+)?)\s*%",
+            text,
+        )
+
+        if not ticker_m or not pct_m:
+            logger.debug("Could not extract ticker/pct from %s", doc_url)
+            return None
+
+        ticker = ticker_m.group(1).upper()
+        pct    = float(pct_m.group(1)) / 100
+        signal = "ACTIVIST_STAKE" if "13D" in form_type else "LARGE_PASSIVE_STAKE"
+
+        return {
+            "ticker":          ticker,
+            "form_type":       form_type,
+            "filer":           filer,
+            "shares":          0,           # full share count needs additional parsing
+            "pct_outstanding": pct,
+            "filed_date":      date,
+            "signal":          signal,
+        }
+
+    except Exception as exc:
+        logger.debug("13D/G parse error %s: %s", doc_url, exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Form 4 — live via FMP insider-trading endpoint
+# ---------------------------------------------------------------------------
+
+def _fetch_fmp_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """Fetch Form 4 insider transactions via FMP for each ticker."""
+    if not FMP_API_KEY:
+        logger.warning("FMP_API_KEY not set — Form 4 skipped.")
+        return {}
+
+    results: dict[str, list[dict]] = {}
+    cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+
+    for ticker in tickers:
+        try:
+            url = (
+                f"https://financialmodelingprep.com/api/v4/insider-trading"
+                f"?symbol={ticker}&page=0&apikey={FMP_API_KEY}"
+            )
+            resp = requests.get(url, timeout=15)
+            resp.raise_for_status()
+            raw = resp.json()
+            if not isinstance(raw, list):
+                continue
+
+            txs: list[dict] = []
+            for tx in raw:
+                filing_date = tx.get("filingDate", "")
+                if filing_date < cutoff:
+                    break   # Results are date-sorted newest-first
+
+                tx_type = tx.get("transactionType", "")
+                if "P-Purchase" in tx_type or tx_type == "P":
+                    signal = "INSIDER_BUY"
+                elif "S-Sale" in tx_type or tx_type == "S":
+                    signal = "INSIDER_SELL"
+                else:
+                    continue    # Skip options exercises, gifts, etc.
+
+                shares = abs(int(tx.get("securitiesTransacted", 0) or 0))
+                price  = float(tx.get("price", 0) or 0)
+
+                # Clean up role string from FMP format "officer: Chief Executive Officer"
+                raw_role = tx.get("typeOfOwner", "") or ""
+                role = re.sub(r"^(officer|director):\s*", "", raw_role, flags=re.I).strip()
+                role = role.title() if role else "Insider"
+
+                txs.append({
+                    "insider":          tx.get("reportingName", "Unknown"),
+                    "role":             role,
+                    "transaction_type": "Purchase" if signal == "INSIDER_BUY" else "Sale",
+                    "shares":           shares,
+                    "price":            price,
+                    "value_usd":        shares * price,
+                    "filed_date":       filing_date,
+                    "signal":           signal,
+                })
+
+                if len(txs) >= 5:   # Cap at 5 per ticker to avoid noise
+                    break
+
+            if txs:
+                results[ticker] = txs
+
+        except Exception as exc:
+            logger.warning("Form 4 skip %s: %s", ticker, exc)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# N-PORT — live via EDGAR submissions + XML parsing
+# ---------------------------------------------------------------------------
+
+def _fetch_edgar_nport() -> dict[str, list[dict[str, Any]]]:
+    """Fetch latest N-PORT-P holdings for each tracked fund."""
+    results: dict[str, list[dict]] = {}
+    for fund_name, cik in TRACKED_NPORT_FUNDS.items():
+        try:
+            holdings = _latest_nport_for_cik(cik)
+            if holdings:
+                results[fund_name] = holdings
+        except Exception as exc:
+            logger.warning("N-PORT skip %s: %s", fund_name, exc)
+    return results
+
+
+def _latest_nport_for_cik(cik: str) -> list[dict[str, Any]]:
+    """Fetch, parse, and annotate the two most recent NPORT-P filings."""
+    resp = requests.get(
+        f"https://data.sec.gov/submissions/CIK{cik}.json",
+        headers=_EDGAR_HEADERS, timeout=20,
+    )
+    resp.raise_for_status()
+    data   = resp.json()
+    recent = data.get("filings", {}).get("recent", {})
+
+    forms        = recent.get("form", [])
+    acc_nums     = recent.get("accessionNumber", [])
+    dates        = recent.get("filingDate", [])
+    primary_docs = recent.get("primaryDocument", [])
+
+    # Collect two most recent NPORT-P filings for MoM comparison
+    nport_meta: list[dict] = []
+    for i, form_type in enumerate(forms):
+        if form_type == "NPORT-P":
+            nport_meta.append({
+                "acc":  acc_nums[i]     if i < len(acc_nums)     else "",
+                "date": dates[i]        if i < len(dates)        else "",
+                "doc":  primary_docs[i] if i < len(primary_docs) else "",
+            })
+        if len(nport_meta) >= 2:
+            break
+
+    if not nport_meta:
+        return []
+
+    # Parse current and (optionally) prior month
+    current_holdings = _parse_nport_xml(cik, nport_meta[0])
+    if not current_holdings:
+        return []
+
+    prev_map: dict[str, int] = {}
+    if len(nport_meta) >= 2:
+        prev = _parse_nport_xml(cik, nport_meta[1])
+        prev_map = {h["ticker"]: h["shares"] for h in prev if h.get("ticker")}
+
+    # Annotate with MoM change + signal
+    result: list[dict] = []
+    for h in current_holdings:
+        ticker      = h.get("ticker", "")
+        curr_shares = h.get("shares", 0)
+        prev_shares = prev_map.get(ticker, 0)
+
+        if prev_shares > 0:
+            change_pct = (curr_shares - prev_shares) / prev_shares
+        elif curr_shares > 0:
+            change_pct = 1.0    # brand-new position
+        else:
+            change_pct = 0.0
+
+        if change_pct >= FUND_ACCUMULATION_THRESHOLD:
+            signal = "FUND_ACCUMULATION"
+        elif change_pct <= FUND_LIQUIDATION_THRESHOLD:
+            signal = "FUND_LIQUIDATION"
+        else:
+            signal = "HOLD"
+
+        result.append({**h, "change_pct": change_pct, "signal": signal})
+
+    # Return top 20 by portfolio weight
+    result.sort(key=lambda x: x.get("portfolio_pct", 0), reverse=True)
+    return result[:20]
+
+
+def _parse_nport_xml(cik: str, filing: dict) -> list[dict[str, Any]]:
+    """Download and parse an NPORT-P XML document into a holdings list."""
+    acc = filing.get("acc", "")
+    doc = filing.get("doc", "")
+    if not acc or not doc:
+        return []
+
+    cik_int   = int(cik)
+    acc_clean = acc.replace("-", "")
+    url = (f"https://www.sec.gov/Archives/edgar/data/"
+           f"{cik_int}/{acc_clean}/{doc}")
+
+    try:
+        resp = requests.get(url, headers=_EDGAR_HEADERS, timeout=45)
+        resp.raise_for_status()
+        content = resp.text
+
+        # Strip XML namespaces so ElementTree can use simple tag names
+        content = re.sub(r'\s+xmlns(?::[^=]+)?="[^"]*"', "", content)
+        content = re.sub(r"<([a-zA-Z]+:)",  "<",  content)
+        content = re.sub(r"</([a-zA-Z]+:)", "</", content)
+
+        root = ET.fromstring(content)
+
+        holdings: list[dict] = []
+        for sec in root.iter("invstOrSec"):
+            # Ticker: lives in <identifiers><ticker> or direct <ticker>
+            ticker_el = sec.find(".//ticker") or sec.find("ticker")
+            if ticker_el is None or not (ticker_el.text or "").strip():
+                continue
+            ticker = ticker_el.text.strip().upper()
+
+            name_el    = sec.find("name")
+            balance_el = sec.find("balance")
+            val_el     = sec.find("valUSD")
+            pct_el     = sec.find("pctVal")
+
+            try:
+                shares      = int(float(balance_el.text)) if balance_el is not None else 0
+                value_usd   = float(val_el.text)          if val_el     is not None else 0.0
+                portfolio_pct = float(pct_el.text) / 100  if pct_el     is not None else 0.0
+            except (ValueError, TypeError):
+                continue
+
+            holdings.append({
+                "ticker":        ticker,
+                "company":       (name_el.text or "").strip() if name_el is not None else "",
+                "shares":        shares,
+                "value_usd":     value_usd,
+                "portfolio_pct": portfolio_pct,
+            })
+
+        return holdings
+
+    except Exception as exc:
+        logger.warning("N-PORT XML parse error CIK %s: %s", cik, exc)
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Mock data (mock mode fallback)
 # ---------------------------------------------------------------------------
 
 def _mock_13dg() -> dict[str, dict[str, Any]]:
     return {
         "OXY": {
-            "form_type":       "SC 13D",
-            "filer":           "Berkshire Hathaway",
-            "shares":          248_018_128,
-            "pct_outstanding": 0.264,
-            "filed_date":      "2024-10-02",
-            "signal":          "ACTIVIST_STAKE",
+            "form_type": "SC 13D", "filer": "Berkshire Hathaway",
+            "shares": 248_018_128, "pct_outstanding": 0.264,
+            "filed_date": "2024-10-02", "signal": "ACTIVIST_STAKE",
         },
         "META": {
-            "form_type":       "SC 13G",
-            "filer":           "Appaloosa Management",
-            "shares":          850_000,
-            "pct_outstanding": 0.033,
-            "filed_date":      "2024-11-14",
-            "signal":          "LARGE_PASSIVE_STAKE",
+            "form_type": "SC 13G", "filer": "Appaloosa Management",
+            "shares": 850_000, "pct_outstanding": 0.033,
+            "filed_date": "2024-11-14", "signal": "LARGE_PASSIVE_STAKE",
         },
         "GOOGL": {
-            "form_type":       "SC 13G",
-            "filer":           "Tiger Global",
-            "shares":          2_100_000,
-            "pct_outstanding": 0.017,
-            "filed_date":      "2024-11-08",
-            "signal":          "LARGE_PASSIVE_STAKE",
+            "form_type": "SC 13G", "filer": "Tiger Global",
+            "shares": 2_100_000, "pct_outstanding": 0.017,
+            "filed_date": "2024-11-08", "signal": "LARGE_PASSIVE_STAKE",
         },
     }
 
-
-def _fetch_edgar_13dg() -> dict[str, dict[str, Any]]:
-    """Live: parse SC 13D/G from SEC EDGAR full-text search API.
-
-    Endpoint: https://efts.sec.gov/LATEST/search-index?forms=SC+13D,SC+13G
-    (No API key required — public endpoint.)
-    """
-    logger.warning("Live 13D/G fetch not yet implemented; returning empty dict.")
-    return {}
-
-
-# ---------------------------------------------------------------------------
-# Form 4 internals
-# ---------------------------------------------------------------------------
 
 def _mock_form4() -> dict[str, list[dict[str, Any]]]:
     return {
-        "AAPL": [
-            {"insider": "Tim Cook",         "role": "CEO", "transaction_type": "Purchase",
-             "shares":  60_000,  "price": 189.30, "value_usd":  11_358_000,
-             "filed_date": "2024-11-20", "signal": "INSIDER_BUY"},
-        ],
-        "OXY": [
-            {"insider": "Vicki Hollub",     "role": "CEO", "transaction_type": "Purchase",
-             "shares":  20_000,  "price":  59.10, "value_usd":   1_182_000,
-             "filed_date": "2024-11-18", "signal": "INSIDER_BUY"},
-        ],
-        "BAC": [
-            {"insider": "Brian Moynihan",   "role": "CEO", "transaction_type": "Sale",
-             "shares": 150_000,  "price":  38.50, "value_usd":   5_775_000,
-             "filed_date": "2024-11-22", "signal": "INSIDER_SELL"},
-        ],
-        "GOOGL": [
-            {"insider": "Sundar Pichai",    "role": "CEO", "transaction_type": "Purchase",
-             "shares":  25_000,  "price": 174.20, "value_usd":   4_355_000,
-             "filed_date": "2024-11-19", "signal": "INSIDER_BUY"},
-        ],
+        "AAPL":  [{"insider": "Tim Cook",       "role": "CEO", "transaction_type": "Purchase",
+                   "shares":  60_000, "price": 189.30, "value_usd":  11_358_000,
+                   "filed_date": "2024-11-20", "signal": "INSIDER_BUY"}],
+        "OXY":   [{"insider": "Vicki Hollub",   "role": "CEO", "transaction_type": "Purchase",
+                   "shares":  20_000, "price":  59.10, "value_usd":   1_182_000,
+                   "filed_date": "2024-11-18", "signal": "INSIDER_BUY"}],
+        "BAC":   [{"insider": "Brian Moynihan", "role": "CEO", "transaction_type": "Sale",
+                   "shares": 150_000, "price":  38.50, "value_usd":   5_775_000,
+                   "filed_date": "2024-11-22", "signal": "INSIDER_SELL"}],
+        "GOOGL": [{"insider": "Sundar Pichai",  "role": "CEO", "transaction_type": "Purchase",
+                   "shares":  25_000, "price": 174.20, "value_usd":   4_355_000,
+                   "filed_date": "2024-11-19", "signal": "INSIDER_BUY"}],
     }
 
-
-def _fetch_edgar_form4(tickers: list[str] | None) -> dict[str, list[dict[str, Any]]]:
-    """Live: parse Form 4 from SEC EDGAR.
-
-    Endpoint: https://data.sec.gov/submissions/CIK{cik}.json
-    then filter form4 filings by insider CIK.
-    (No API key required — public endpoint.)
-    """
-    logger.warning("Live Form 4 fetch not yet implemented; returning empty dict.")
-    return {}
-
-
-# ---------------------------------------------------------------------------
-# N-PORT internals
-# ---------------------------------------------------------------------------
 
 def _mock_nport() -> dict[str, list[dict[str, Any]]]:
     return {
         "Vanguard 500 Index": [
-            {"ticker": "AAPL",  "company": "Apple Inc.",       "shares": 12_500_000, "value_usd": 2_367_500_000, "portfolio_pct": 0.071, "change_pct":  0.08,  "signal": "FUND_ACCUMULATION"},
-            {"ticker": "MSFT",  "company": "Microsoft Corp.",  "shares":  9_800_000, "value_usd": 3_704_400_000, "portfolio_pct": 0.069, "change_pct":  0.05,  "signal": "FUND_ACCUMULATION"},
-            {"ticker": "NVDA",  "company": "NVIDIA Corp.",     "shares":  8_200_000, "value_usd": 3_690_000_000, "portfolio_pct": 0.061, "change_pct":  0.22,  "signal": "FUND_ACCUMULATION"},
-            {"ticker": "AMZN",  "company": "Amazon.com Inc.",  "shares":  6_100_000, "value_usd": 1_037_000_000, "portfolio_pct": 0.037, "change_pct": -0.04,  "signal": "FUND_LIQUIDATION"},
+            {"ticker": "AAPL", "company": "Apple Inc.",      "shares": 12_500_000, "value_usd": 2_367_500_000, "portfolio_pct": 0.071, "change_pct":  0.08, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "MSFT", "company": "Microsoft Corp.", "shares":  9_800_000, "value_usd": 3_704_400_000, "portfolio_pct": 0.069, "change_pct":  0.05, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "NVDA", "company": "NVIDIA Corp.",    "shares":  8_200_000, "value_usd": 3_690_000_000, "portfolio_pct": 0.061, "change_pct":  0.22, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc.", "shares":  6_100_000, "value_usd": 1_037_000_000, "portfolio_pct": 0.037, "change_pct": -0.04, "signal": "FUND_LIQUIDATION"},
         ],
         "ARK Innovation ETF": [
-            {"ticker": "TSLA",  "company": "Tesla Inc.",       "shares":  3_200_000, "value_usd":   819_200_000, "portfolio_pct": 0.112, "change_pct":  0.18,  "signal": "FUND_ACCUMULATION"},
-            {"ticker": "COIN",  "company": "Coinbase Global",  "shares":  2_100_000, "value_usd":   504_000_000, "portfolio_pct": 0.073, "change_pct":  0.31,  "signal": "FUND_ACCUMULATION"},
-            {"ticker": "GOOGL", "company": "Alphabet Inc.",    "shares":    850_000, "value_usd":   148_100_000, "portfolio_pct": 0.021, "change_pct": -0.12,  "signal": "FUND_LIQUIDATION"},
+            {"ticker": "TSLA", "company": "Tesla Inc.",     "shares": 3_200_000, "value_usd":  819_200_000, "portfolio_pct": 0.112, "change_pct":  0.18, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "COIN", "company": "Coinbase Global","shares": 2_100_000, "value_usd":  504_000_000, "portfolio_pct": 0.073, "change_pct":  0.31, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "GOOGL","company": "Alphabet Inc.",  "shares":   850_000, "value_usd":  148_100_000, "portfolio_pct": 0.021, "change_pct": -0.12, "signal": "FUND_LIQUIDATION"},
         ],
     }
-
-
-def _fetch_edgar_nport() -> dict[str, list[dict[str, Any]]]:
-    """Live: parse N-PORT from SEC EDGAR structured data API.
-
-    Endpoint: https://data.sec.gov/api/xbrl/frames/...  or
-              https://efts.sec.gov/LATEST/search-index?forms=NPORT-P
-    (No API key required — public endpoint.)
-    """
-    logger.warning("Live N-PORT fetch not yet implemented; returning empty dict.")
-    return {}

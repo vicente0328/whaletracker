@@ -30,8 +30,12 @@ DATA_MODE = os.getenv("DATA_MODE", "mock")
 
 # ── DATA (loaded once at startup) ──────────────────────────────────────────────
 filings          = fetch_all_whale_filings()
+
+# In live mode, query Form 4 for every ticker found in the 13F holdings
+_live_tickers = list({h["ticker"] for holds in filings.values() for h in holds})
+
 activist         = fetch_13dg_filings()
-insiders         = fetch_form4_filings()
+insiders         = fetch_form4_filings(_live_tickers)
 nport            = fetch_nport_filings()
 
 recommendations  = build_recommendations(
@@ -285,7 +289,7 @@ def build_whale_tab():
             title=dict(text="Sector Rotation — Net Whale Flow",
                        font=dict(size=12, color=f"#{C['muted']}"), x=0, xanchor="left"),
             xaxis=dict(showgrid=False, showticklabels=False, zeroline=True,
-                       zerolinecolor=f"#{C['border']}", zerolinewidth=1),
+                       zerolinecolor="rgba(255,255,255,0.07)", zerolinewidth=1),
             yaxis=dict(showgrid=False, tickfont=dict(size=11), autorange="reversed"),
             bargap=0.4,
         ))
@@ -565,7 +569,7 @@ def build_portfolio_tab():
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
                     font=dict(size=11), bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(showgrid=False, tickfont=dict(size=10)),
-        yaxis=dict(showgrid=True, gridcolor=f"#{C['border']}",
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.07)",
                    ticksuffix="%", tickfont=dict(size=10)),
         bargap=0.25, bargroupgap=0.06,
     ))
