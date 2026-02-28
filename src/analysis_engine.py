@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Conviction scoring weights
 # ---------------------------------------------------------------------------
 
-SIGNAL_SCORES: dict[str, int] = {
+SIGNAL_SCORES: dict[str, float] = {
     # 13F signals
     "NEW_ENTRY":           3,
     "AGGRESSIVE_BUY":      4,
@@ -38,6 +38,7 @@ SIGNAL_SCORES: dict[str, int] = {
     # Form 4 signals
     "INSIDER_BUY":         3,
     "INSIDER_SELL":       -2,
+    "PLANNED_SELL":       -0.5,  # Rule 10b5-1 pre-planned sale — minimal bearish weight
     # N-PORT signals
     "FUND_ACCUMULATION":   2,
     "FUND_LIQUIDATION":   -1,
@@ -70,19 +71,32 @@ def build_recommendations(
     Returns:
         List of recommendation dicts sorted by conviction_score descending.
     """
+    # Import tier data lazily to avoid circular imports
+    try:
+        from src.data_collector import WHALE_TIERS  # noqa: PLC0415
+    except ImportError:
+        WHALE_TIERS = {}
+
     ticker_map: dict[str, dict] = {}
 
-    # ── 1. 13F whale signals ─────────────────────────────────────────────────
+    # ── 1. 13F whale signals (tier-weighted) ─────────────────────────────────
     for whale_name, holdings in whale_filings.items():
+        tier_info   = WHALE_TIERS.get(whale_name, {"tier": 3, "multiplier": 1.0})
+        multiplier  = tier_info["multiplier"]
         for holding in holdings:
             ticker = holding.get("ticker", "")
             if not ticker:
                 continue
-            entry = _get_or_create(ticker_map, ticker, holding)
+            entry  = _get_or_create(ticker_map, ticker, holding)
             signal = holding.get("signal", "HOLD")
+            raw    = SIGNAL_SCORES.get(signal, 0)
+            # Apply tier multiplier to positive signals only; negatives stay unweighted
+            weighted = round(raw * multiplier) if raw > 0 else raw
             entry["signals"].append(signal)
-            entry["conviction_score"] += SIGNAL_SCORES.get(signal, 0)
+            entry["conviction_score"] += weighted
             entry["supporting_whales"].append(whale_name)
+            # Store tier label for UI display
+            entry.setdefault("whale_tiers", {})[whale_name] = tier_info.get("label", "")
 
     # ── 2. SC 13D/G activist / passive stake signals ─────────────────────────
     for ticker, filing in (activist_filings or {}).items():
@@ -137,9 +151,10 @@ def build_recommendations(
             "company":           data["company"],
             "signal_summary":    ", ".join(dict.fromkeys(data["signals"])),  # dedup, preserve order
             "whale_count":       len(set(data["supporting_whales"])),
-            "conviction_score":  data["conviction_score"],
+            "conviction_score":  round(data["conviction_score"]),
             "recommendation":    rec,
             "supporting_whales": list(set(data["supporting_whales"])),
+            "whale_tiers":       data.get("whale_tiers", {}),
             "sources":           sorted(data["sources"]),
             "macro_note":        _build_macro_note(macro_context),
         })

@@ -59,6 +59,18 @@ TRACKED_WHALES: dict[str, str] = {
     "Tiger Global":          "0001167483",
 }
 
+# Whale Tier classification
+# Tier 1 — Long-term value / macro investors (highest signal weight)
+# Tier 2 — Activist / concentrated value funds
+# Tier 3 — Growth / quant / high-turnover funds
+WHALE_TIERS: dict[str, dict] = {
+    "Berkshire Hathaway":    {"tier": 1, "style": "Value",    "label": "T1 · Value",    "multiplier": 1.5},
+    "Bridgewater Associates":{"tier": 1, "style": "Macro",    "label": "T1 · Macro",    "multiplier": 1.2},
+    "Pershing Square":       {"tier": 2, "style": "Activist", "label": "T2 · Activist", "multiplier": 1.3},
+    "Appaloosa Management":  {"tier": 2, "style": "Value",    "label": "T2 · Value",    "multiplier": 1.1},
+    "Tiger Global":          {"tier": 3, "style": "Growth",   "label": "T3 · Growth",   "multiplier": 1.0},
+}
+
 # Tracked N-PORT funds: {display_name: CIK}
 # CIKs verified via data.sec.gov/submissions/CIK{cik}.json
 TRACKED_NPORT_FUNDS: dict[str, str] = {
@@ -792,6 +804,14 @@ def _parse_edgar_form4(
         if sym_el is None or (sym_el.text or "").strip().upper() != target_ticker.upper():
             return []
 
+        # Detect Rule 10b5-1 plan at the filing level.
+        # If ANY footnote mentions "10b5-1", sells in this filing are pre-planned
+        # and should carry lower bearish weight.
+        footnotes_text = " ".join(
+            (fn.text or "") for fn in root.findall(".//{*}footnote")
+        )
+        is_10b51_filing = bool(re.search(r"10b5[-\s]?1", footnotes_text, re.IGNORECASE))
+
         name_el  = root.find(".//{*}rptOwnerName")
         role_el  = root.find(".//{*}officerTitle")
         is_dir   = root.find(".//{*}isDirector")
@@ -819,13 +839,17 @@ def _parse_edgar_form4(
             if shares_el is None or code_el is None:
                 continue
             code = (code_el.text or "").strip().upper()
-            signal = "INSIDER_BUY" if code == "A" else ("INSIDER_SELL" if code == "D" else "")
-            if not signal:
+            if code == "A":
+                signal = "INSIDER_BUY"
+            elif code == "D":
+                # Pre-planned 10b5-1 sells carry less bearish weight
+                signal = "PLANNED_SELL" if is_10b51_filing else "INSIDER_SELL"
+            else:
                 continue
 
             try:
-                shares    = abs(int(float(shares_el.text or 0)))
-                price     = float(price_el.text or 0) if price_el is not None else 0.0
+                shares     = abs(int(float(shares_el.text or 0)))
+                price      = float(price_el.text or 0) if price_el is not None else 0.0
                 filed_date = (date_el.text or "").strip()[:10] if date_el is not None else ""
             except (ValueError, TypeError):
                 continue
@@ -839,6 +863,7 @@ def _parse_edgar_form4(
                 "value_usd":        shares * price,
                 "filed_date":       filed_date,
                 "signal":           signal,
+                "is_10b51":         is_10b51_filing and signal == "PLANNED_SELL",
             })
             if len(txs) >= 3:
                 break

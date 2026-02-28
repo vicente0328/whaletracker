@@ -8,7 +8,7 @@ Production:   gunicorn app:server --bind 0.0.0.0:$PORT
 import os
 from datetime import datetime
 
-from dash import Dash, html, dcc, Input, Output, ctx
+from dash import Dash, html, dcc, Input, Output, State, ctx
 import plotly.graph_objects as go
 from dotenv import load_dotenv
 
@@ -17,6 +17,7 @@ from src.data_collector import (
     fetch_13dg_filings,
     fetch_form4_filings,
     fetch_nport_filings,
+    WHALE_TIERS,
 )
 from src.analysis_engine import (
     build_recommendations,
@@ -70,6 +71,7 @@ SIG = {
     # Form 4 signals
     "INSIDER_BUY":         {"color": f"#{C['green']}",  "label": "INSIDER BUY"},
     "INSIDER_SELL":        {"color": f"#{C['red']}",    "label": "INSIDER SELL"},
+    "PLANNED_SELL":        {"color": f"#{C['muted']}",  "label": "10b5-1 SELL"},
     # N-PORT signals
     "FUND_ACCUMULATION":   {"color": "#20B2AA",           "label": "FUND ACCUM"},
     "FUND_LIQUIDATION":    {"color": "#FF8C00",            "label": "FUND SELL"},
@@ -308,6 +310,11 @@ def build_whale_tab():
         si = SIG.get(top_sig, SIG["HOLD"])
 
         # Whale section header
+        tier_info  = WHALE_TIERS.get(whale, {"label": "", "tier": 3})
+        tier_label = tier_info.get("label", "")
+        tier_color = (f"#{C['green']}" if tier_info.get("tier") == 1
+                      else f"#{C['amber']}" if tier_info.get("tier") == 2
+                      else f"#{C['muted']}")
         sections.append(html.Div([
             html.Div([
                 html.Span(whale, className="whale-name"),
@@ -316,7 +323,16 @@ def build_whale_tab():
                     "border": f"1px solid {si['color']}44", "borderRadius": "5px",
                     "padding": "2px 9px", "fontSize": "0.62rem", "fontWeight": "700",
                 }),
-            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+                *(
+                    [html.Span(tier_label, style={
+                        "background": f"{tier_color}14", "color": tier_color,
+                        "border": f"1px solid {tier_color}33", "borderRadius": "5px",
+                        "padding": "2px 8px", "fontSize": "0.57rem", "fontWeight": "600",
+                        "letterSpacing": "0.3px",
+                    })]
+                    if tier_label else []
+                ),
+            ], style={"display": "flex", "alignItems": "center", "gap": "8px"}),
             html.Span(
                 [f"{len(holdings)} positions · ", html.Span(str(non_hold), style={"color": f"#{C['green']}"}), " active"],
                 className="whale-meta",
@@ -489,16 +505,19 @@ def build_whale_tab():
     return html.Div(sections)
 
 
-def build_rec_cards(filter_val: str = "ALL"):
-    filtered = (
-        recommendations if filter_val == "ALL"
-        else [r for r in recommendations if r["recommendation"] == filter_val]
-    )
+def build_rec_cards(filter_val: str = "ALL", watchlist: list | None = None):
+    if filter_val == "📌 WATCHLIST":
+        wl = {t.strip().upper() for t in (watchlist or [])}
+        filtered = [r for r in recommendations if r["ticker"] in wl] if wl else []
+    elif filter_val == "ALL":
+        filtered = recommendations
+    else:
+        filtered = [r for r in recommendations if r["recommendation"] == filter_val]
     if not filtered:
-        return html.Div(
-            f"No {filter_val} recommendations in the current dataset.",
-            className="empty-state",
-        )
+        msg = ("No tickers in watchlist — use the ＋ Add input above to add tickers."
+               if filter_val == "📌 WATCHLIST"
+               else f"No {filter_val} recommendations in the current dataset.")
+        return html.Div(msg, className="empty-state")
     N = 3
     rows = []
     for i in range(0, len(filtered), N):
@@ -1141,6 +1160,9 @@ server = app.server  # Gunicorn entry point
 # ── LAYOUT ─────────────────────────────────────────────────────────────────────
 app.layout = html.Div([
 
+    # Watchlist persistent store (localStorage)
+    dcc.Store(id="watchlist-store", storage_type="local", data=[]),
+
     # Header
     html.Div([
         html.Div([
@@ -1193,11 +1215,13 @@ def render_tab(tab: str):
         return build_whale_tab()
     if tab == "tab-recs":
         return html.Div([
+            # Filter bar
             html.Div([
                 dcc.RadioItems(
                     id="rec-filter",
                     options=[{"label": v, "value": v}
-                             for v in ["ALL", "STRONG BUY", "BUY", "HOLD", "SELL"]],
+                             for v in ["ALL", "STRONG BUY", "BUY", "HOLD", "SELL",
+                                       "📌 WATCHLIST"]],
                     value="ALL",
                     inline=True,
                     className="rec-filter",
@@ -1208,15 +1232,106 @@ def render_tab(tab: str):
                     className="rec-count",
                 ),
             ], className="rec-filter-row"),
+            # Watchlist input (shown only when WATCHLIST filter is active)
+            html.Div([
+                html.Div("📌 Watchlist", style={
+                    "fontSize": "0.68rem", "fontWeight": "700",
+                    "color": f"#{C['amber']}", "marginRight": "8px",
+                }),
+                dcc.Input(
+                    id="watchlist-input",
+                    type="text",
+                    placeholder="Add ticker (e.g. AAPL)…",
+                    debounce=False,
+                    className="watchlist-input",
+                    style={
+                        "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
+                        "borderRadius": "6px", "color": f"#{C['text']}",
+                        "padding": "4px 10px", "fontSize": "0.78rem",
+                        "outline": "none", "width": "180px", "marginRight": "6px",
+                    },
+                ),
+                html.Button("＋ Add", id="watchlist-add", n_clicks=0, style={
+                    "background": f"#{C['amber']}22", "color": f"#{C['amber']}",
+                    "border": f"1px solid #{C['amber']}44", "borderRadius": "6px",
+                    "padding": "4px 12px", "fontSize": "0.72rem", "fontWeight": "700",
+                    "cursor": "pointer",
+                }),
+                html.Div(id="watchlist-chips", style={
+                    "display": "flex", "flexWrap": "wrap",
+                    "gap": "5px", "marginLeft": "10px",
+                }),
+            ], id="watchlist-bar", style={
+                "display": "none",   # toggled by callback
+                "alignItems": "center", "flexWrap": "wrap", "gap": "6px",
+                "background": f"#{C['card']}", "borderRadius": "8px",
+                "padding": "8px 14px", "marginBottom": "1rem",
+                "border": f"1px solid #{C['amber']}33",
+            }),
             html.Div(id="rec-cards", children=build_rec_cards("ALL")),
         ])
     if tab == "tab-port":
         return build_portfolio_tab()
 
 
-@app.callback(Output("rec-cards", "children"), Input("rec-filter", "value"))
-def update_rec_cards(filter_val: str):
-    return build_rec_cards(filter_val)
+@app.callback(
+    Output("rec-cards", "children"),
+    Input("rec-filter",       "value"),
+    Input("watchlist-store",  "data"),
+)
+def update_rec_cards(filter_val: str, watchlist):
+    return build_rec_cards(filter_val, watchlist or [])
+
+
+@app.callback(
+    Output("watchlist-bar", "style"),
+    Input("rec-filter", "value"),
+)
+def toggle_watchlist_bar(filter_val):
+    base = {
+        "alignItems": "center", "flexWrap": "wrap", "gap": "6px",
+        "background": f"#{C['card']}", "borderRadius": "8px",
+        "padding": "8px 14px", "marginBottom": "1rem",
+        "border": f"1px solid #{C['amber']}33",
+    }
+    base["display"] = "flex" if filter_val == "📌 WATCHLIST" else "none"
+    return base
+
+
+@app.callback(
+    Output("watchlist-store", "data"),
+    Output("watchlist-input", "value"),
+    Input("watchlist-add",  "n_clicks"),
+    State("watchlist-input", "value"),
+    State("watchlist-store", "data"),
+    prevent_initial_call=True,
+)
+def add_to_watchlist(_clicks, ticker_raw, current_list):
+    current = list(current_list or [])
+    if ticker_raw:
+        ticker = ticker_raw.strip().upper()
+        if ticker and ticker not in current:
+            current.append(ticker)
+    return current, ""
+
+
+@app.callback(
+    Output("watchlist-chips", "children"),
+    Input("watchlist-store", "data"),
+)
+def render_watchlist_chips(watchlist):
+    chips = []
+    for ticker in (watchlist or []):
+        chips.append(html.Span([
+            ticker,
+            html.Span(" ×", style={"cursor": "pointer", "marginLeft": "4px",
+                                    "opacity": "0.7"}),
+        ], style={
+            "background": f"#{C['amber']}1A", "color": f"#{C['amber']}",
+            "border": f"1px solid #{C['amber']}44", "borderRadius": "5px",
+            "padding": "2px 8px", "fontSize": "0.7rem", "fontWeight": "700",
+        }))
+    return chips
 
 
 @app.callback(
@@ -1232,6 +1347,28 @@ def toggle_modal(_open, _close):
 @app.callback(Output("guide-content", "children"), Input("guide-lang", "value"))
 def render_guide(lang: str):
     return build_guide(lang)
+
+
+# ── SCHEDULER ──────────────────────────────────────────────────────────────────
+# Start background Slack-alert job only when a token is configured.
+# In mock/dev mode this is a no-op if SLACK_BOT_TOKEN is not set.
+if os.getenv("SLACK_BOT_TOKEN"):
+    try:
+        from src.scheduler import start as _start_scheduler  # noqa: PLC0415
+        _start_scheduler({
+            "filings":         filings,
+            "activist":        activist,
+            "insiders":        insiders,
+            "nport":           nport,
+            "recommendations": recommendations,
+            "rebalancing":     rebalancing,
+            "portfolio":       portfolio,
+        })
+    except Exception as _sched_err:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "Scheduler could not start: %s", _sched_err
+        )
 
 
 if __name__ == "__main__":
