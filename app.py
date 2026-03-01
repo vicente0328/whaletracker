@@ -2842,6 +2842,8 @@ app.layout = html.Div([
                 className="tab", selected_className="tab-active"),
         dcc.Tab(label="📈  Macro",           value="tab-macro",
                 className="tab", selected_className="tab-active"),
+        dcc.Tab(label="⏱  Backtest",        value="tab-backtest",
+                className="tab", selected_className="tab-active"),
     ]),
 
     html.Div(id="tab-content", style={"paddingTop": "1.2rem"}),
@@ -2856,6 +2858,339 @@ app.layout = html.Div([
     html.Button(id="google-cred-trigger", n_clicks=0, style={"display": "none"}),
 
 ], className="app-shell")
+
+
+# ── BACKTEST TAB ───────────────────────────────────────────────────────────────
+
+def build_backtest_tab() -> html.Div:
+    """Backtest layout — no live data needed at render time."""
+    _card = {"background": f"#{C['card']}", "borderRadius": "12px",
+              "border": f"1px solid #{C['border']}", "padding": "1.2rem"}
+
+    def _kpi_card(label: str, cid: str, color: str = C["text"]) -> html.Div:
+        return html.Div([
+            html.Div(label, style={"fontSize": "0.65rem", "fontWeight": "700",
+                                   "color": f"#{C['muted']}", "letterSpacing": "0.06em",
+                                   "textTransform": "uppercase", "marginBottom": "4px"}),
+            html.Div("—", id=cid, style={"fontSize": "1.55rem", "fontWeight": "800",
+                                          "color": f"#{color}", "lineHeight": "1.1"}),
+        ], style={**_card, "flex": "1", "minWidth": "130px", "textAlign": "center"})
+
+    return html.Div([
+        # ── Header ──────────────────────────────────────────────────────────
+        html.Div([
+            html.Div([
+                html.H2("⏱ Signal Backtest", style={
+                    "margin": "0", "fontSize": "1.25rem", "fontWeight": "800",
+                    "color": f"#{C['text']}",
+                }),
+                html.P(
+                    "Simulates following WhaleTracker STRONG BUY signals · "
+                    "equal-weight · quarterly rebalancing · 45-day filing delay · no fees",
+                    style={"margin": "4px 0 0", "fontSize": "0.72rem",
+                           "color": f"#{C['muted']}"},
+                ),
+            ], style={"flex": "1"}),
+        ], style={"display": "flex", "alignItems": "flex-start",
+                  "marginBottom": "1.2rem"}),
+
+        # ── Controls ────────────────────────────────────────────────────────
+        html.Div([
+            # Period presets
+            html.Div([
+                html.Div("Period", style={"fontSize": "0.65rem", "fontWeight": "700",
+                                          "color": f"#{C['muted']}", "marginBottom": "6px",
+                                          "letterSpacing": "0.06em", "textTransform": "uppercase"}),
+                html.Div([
+                    html.Button(label, id=f"bt-period-{val}", n_clicks=0,
+                                className="bt-period-btn",
+                                **{"data-years": str(val)},
+                                style={
+                                    "padding": "7px 18px", "borderRadius": "8px",
+                                    "fontSize": "0.82rem", "fontWeight": "700",
+                                    "cursor": "pointer", "transition": "all 0.15s",
+                                    "border": f"1px solid #{C['border']}",
+                                    "background": f"#{C['card2']}",
+                                    "color": f"#{C['muted']}",
+                                })
+                    for label, val in [("1Y", 1), ("3Y", 3), ("5Y", 5)]
+                ], style={"display": "flex", "gap": "8px"}),
+            ]),
+            # Capital input
+            html.Div([
+                html.Div("Initial Capital ($)", style={
+                    "fontSize": "0.65rem", "fontWeight": "700",
+                    "color": f"#{C['muted']}", "marginBottom": "6px",
+                    "letterSpacing": "0.06em", "textTransform": "uppercase",
+                }),
+                dcc.Input(
+                    id="bt-capital",
+                    type="number",
+                    value=100_000,
+                    min=1_000,
+                    step=1_000,
+                    debounce=False,
+                    style={
+                        "background": f"#{C['card2']}", "border": f"1px solid #{C['border']}",
+                        "borderRadius": "8px", "color": f"#{C['text']}",
+                        "padding": "7px 12px", "fontSize": "0.9rem",
+                        "outline": "none", "width": "160px",
+                    },
+                ),
+            ]),
+            # Run button
+            html.Div([
+                html.Button("▶ Run Backtest", id="bt-run-btn", n_clicks=0, style={
+                    "background": f"#{C['blue']}", "color": "#fff",
+                    "border": "none", "borderRadius": "8px",
+                    "padding": "9px 24px", "fontSize": "0.88rem", "fontWeight": "700",
+                    "cursor": "pointer", "marginTop": "20px",
+                }),
+            ]),
+        ], style={"display": "flex", "alignItems": "flex-end", "gap": "20px",
+                  "flexWrap": "wrap", "marginBottom": "1.4rem",
+                  **_card}),
+
+        # ── KPI strip ───────────────────────────────────────────────────────
+        dcc.Loading(
+            id="bt-loading",
+            type="circle",
+            color=f"#{C['blue']}",
+            children=html.Div([
+                html.Div([
+                    _kpi_card("Total Return",      "bt-kpi-total",  C["green"]),
+                    _kpi_card("vs SPY (Alpha)",    "bt-kpi-alpha",  C["blue"]),
+                    _kpi_card("Ann. Return",       "bt-kpi-ann",    C["text"]),
+                    _kpi_card("Max Drawdown",      "bt-kpi-dd",     C["red"]),
+                    _kpi_card("Sharpe Ratio",      "bt-kpi-sharpe", C["text"]),
+                    _kpi_card("Monthly Win Rate",  "bt-kpi-win",    C["amber"]),
+                    _kpi_card("# Trades",          "bt-kpi-trades", C["muted"]),
+                    _kpi_card("Final Value",       "bt-kpi-final",  C["green"]),
+                ], style={"display": "flex", "gap": "10px", "flexWrap": "wrap",
+                          "marginBottom": "1.2rem"}),
+
+                # Portfolio vs SPY chart
+                html.Div(id="bt-chart-container", style={"marginBottom": "1.2rem"}),
+
+                # Quarterly trade log
+                html.Div(id="bt-trade-log"),
+            ]),
+        ),
+
+        # Disclaimer
+        html.Div(
+            "⚠ 45일 지연 반영 · 분기 리밸런싱 · 수수료 미포함 · 과거 성과가 미래를 보장하지 않습니다.",
+            style={"fontSize": "0.68rem", "color": f"#{C['muted']}",
+                   "marginTop": "1rem", "textAlign": "center",
+                   "borderTop": f"1px solid #{C['border']}", "paddingTop": "10px"},
+        ),
+
+        # Hidden store for selected period
+        dcc.Store(id="bt-period-store", data=3),
+
+    ], style={"padding": "0.2rem 0"})
+
+
+# ── BACKTEST CALLBACKS ─────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("bt-period-store", "data"),
+    [Input(f"bt-period-{v}", "n_clicks") for v in [1, 3, 5]],
+    prevent_initial_call=True,
+)
+def _bt_select_period(*n_clicks_list):
+    triggered = ctx.triggered_id
+    mapping   = {"bt-period-1": 1, "bt-period-3": 3, "bt-period-5": 5}
+    return mapping.get(triggered, 3)
+
+
+@app.callback(
+    Output("bt-period-1", "style"),
+    Output("bt-period-3", "style"),
+    Output("bt-period-5", "style"),
+    Input("bt-period-store", "data"),
+)
+def _bt_period_styles(years):
+    _base = {
+        "padding": "7px 18px", "borderRadius": "8px",
+        "fontSize": "0.82rem", "fontWeight": "700",
+        "cursor": "pointer", "transition": "all 0.15s",
+    }
+    _active = {**_base, "background": f"#{C['blue']}", "color": "#fff",
+                "border": f"1px solid #{C['blue']}"}
+    _idle   = {**_base, "background": f"#{C['card2']}",
+                "color": f"#{C['muted']}",
+                "border": f"1px solid #{C['border']}"}
+    return (
+        _active if years == 1 else _idle,
+        _active if years == 3 else _idle,
+        _active if years == 5 else _idle,
+    )
+
+
+@app.callback(
+    Output("bt-kpi-total",    "children"),
+    Output("bt-kpi-alpha",    "children"),
+    Output("bt-kpi-ann",      "children"),
+    Output("bt-kpi-dd",       "children"),
+    Output("bt-kpi-sharpe",   "children"),
+    Output("bt-kpi-win",      "children"),
+    Output("bt-kpi-trades",   "children"),
+    Output("bt-kpi-final",    "children"),
+    Output("bt-chart-container", "children"),
+    Output("bt-trade-log",    "children"),
+    Input("bt-run-btn",       "n_clicks"),
+    State("bt-period-store",  "data"),
+    State("bt-capital",       "value"),
+    prevent_initial_call=True,
+    running=[
+        (Output("bt-run-btn", "disabled"), True, False),
+        (Output("bt-run-btn", "children"), "⏳ Running…", "▶ Run Backtest"),
+    ],
+)
+def run_bt(n_clicks, years, capital):
+    import plotly.graph_objects as go
+    from src.backtester import run_backtest
+
+    _empty = ("—",) * 8 + (html.Div(), html.Div())
+    if not n_clicks:
+        return _empty
+
+    years   = int(years   or 3)
+    capital = float(capital or 100_000)
+
+    try:
+        result = run_backtest(years=years, initial_capital=capital, min_signal="STRONG BUY")
+    except Exception as exc:
+        logger.error("Backtest failed: %s", exc, exc_info=True)
+        err = html.Div(f"Backtest error: {exc}",
+                       style={"color": f"#{C['red']}", "padding": "1rem",
+                              "fontSize": "0.85rem"})
+        return ("ERR",) * 8 + (err, html.Div())
+
+    if result is None:
+        msg = html.Div(
+            "Not enough historical data from EDGAR / FMP to run the backtest. "
+            "Ensure FMP_API_KEY is set and the API has historical price data.",
+            style={"color": f"#{C['amber']}", "padding": "1rem",
+                   "fontSize": "0.85rem", "maxWidth": "520px"},
+        )
+        return ("N/A",) * 8 + (msg, html.Div())
+
+    m   = result.metrics
+    _pct = lambda v: f"{v:+.1f}%" if v else "—"
+    _r   = lambda v: f"{v:.2f}"   if v else "—"
+    _usd = lambda v: f"${v:,.0f}" if v else "—"
+
+    total  = _pct(m.get("total_return_pct"))
+    alpha  = _pct(m.get("alpha_pct"))
+    ann    = _pct(m.get("annualized_return_pct"))
+    dd     = f"{m.get('max_drawdown_pct', 0):.1f}%"
+    sharpe = _r(m.get("sharpe_ratio"))
+    win    = f"{m.get('win_rate_pct', 0):.0f}%"
+    trades = str(m.get("n_trades", 0))
+    final  = _usd(m.get("final_value"))
+
+    # ── Chart ─────────────────────────────────────────────────────────────
+    port_s  = result.portfolio_series
+    bench_s = result.benchmark_series
+
+    # normalise to % gain from start
+    port_pct  = (port_s  / capital - 1) * 100
+    bench_pct = (bench_s / capital - 1) * 100
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=port_pct.index.tolist(), y=port_pct.values.tolist(),
+        name="WhaleTracker", mode="lines",
+        line=dict(color=f"#{C['blue']}", width=2),
+        hovertemplate="%{x}<br>%{y:.1f}%<extra>WhaleTracker</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=bench_pct.index.tolist(), y=bench_pct.values.tolist(),
+        name="SPY (benchmark)", mode="lines",
+        line=dict(color=f"#{C['muted']}", width=1.5, dash="dot"),
+        hovertemplate="%{x}<br>%{y:.1f}%<extra>SPY</extra>",
+    ))
+    # Add vertical lines for rebalancing events
+    for ql in result.quarterly_log:
+        fig.add_vline(
+            x=ql["date"], line_width=1,
+            line_dash="dot", line_color=f"#{C['border']}",
+        )
+
+    fig.update_layout(
+        paper_bgcolor=f"#{C['card']}",
+        plot_bgcolor=f"#{C['card']}",
+        font=dict(family="Inter, sans-serif", color=f"#{C['text']}"),
+        margin=dict(l=10, r=10, t=10, b=10),
+        legend=dict(
+            orientation="h", x=0.01, y=0.99,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11, color=f"#{C['muted']}"),
+        ),
+        xaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
+                   linecolor=f"#{C['border']}"),
+        yaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
+                   linecolor=f"#{C['border']}", ticksuffix="%"),
+        hovermode="x unified",
+        height=340,
+    )
+    chart = dcc.Graph(figure=fig, config={"displayModeBar": False},
+                      style={"borderRadius": "12px", "overflow": "hidden",
+                             "border": f"1px solid #{C['border']}"})
+
+    # ── Trade log ─────────────────────────────────────────────────────────
+    buy_trades = [t for t in result.trades if t.action == "BUY"]
+    if not buy_trades:
+        trade_table = html.Div("No trades recorded.", style={"color": f"#{C['muted']}",
+                                                              "fontSize": "0.8rem"})
+    else:
+        _th = lambda label: html.Th(label, style={
+            "padding": "6px 12px", "fontSize": "0.65rem", "fontWeight": "700",
+            "color": f"#{C['muted']}", "textAlign": "left",
+            "textTransform": "uppercase", "letterSpacing": "0.06em",
+            "borderBottom": f"1px solid #{C['border']}",
+        })
+        _td = lambda val, color=None: html.Td(val, style={
+            "padding": "5px 12px", "fontSize": "0.75rem",
+            "color": f"#{color or C['text']}", "whiteSpace": "nowrap",
+        })
+
+        rows = []
+        for t in buy_trades[-50:]:   # last 50 BUY entries to keep page short
+            rec_color = C["green"] if "STRONG" in t.signal else C["blue"]
+            rows.append(html.Tr([
+                _td(t.date,    C["muted"]),
+                _td(t.ticker,  C["blue"]),
+                _td(t.company[:28]),
+                _td(t.signal,  rec_color),
+                _td(f"{t.score:.1f}",   C["amber"]),
+                _td(f"${t.price:,.2f}"),
+                _td(f"${t.value:,.0f}", C["green"]),
+            ]))
+
+        header = html.Tr([
+            _th("Date"), _th("Ticker"), _th("Company"),
+            _th("Signal"), _th("Score"), _th("Price"), _th("Value"),
+        ])
+
+        trade_table = html.Div([
+            html.Div("Trade Log", style={
+                "fontSize": "0.78rem", "fontWeight": "700",
+                "color": f"#{C['text']}", "marginBottom": "8px",
+            }),
+            html.Div(
+                html.Table([html.Thead(header), html.Tbody(rows)],
+                           style={"width": "100%", "borderCollapse": "collapse"}),
+                style={"overflowX": "auto"},
+            ),
+        ], style={
+            "background": f"#{C['card']}", "borderRadius": "12px",
+            "border": f"1px solid #{C['border']}", "padding": "1rem",
+        })
+
+    return total, alpha, ann, dd, sharpe, win, trades, final, chart, trade_table
 
 
 # ── CALLBACKS ──────────────────────────────────────────────────────────────────
@@ -2941,6 +3276,9 @@ def render_tab(tab: str, auth_data):
                 style={"color": f"#{C['red']}", "padding": "2rem",
                        "fontSize": "0.85rem"},
             )
+    if tab == "tab-backtest":
+        return build_backtest_tab()
+    return html.Div()
 
 
 @app.callback(
