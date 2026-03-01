@@ -2674,31 +2674,34 @@ app.layout = html.Div([
             html.Button(
                 id="daily-news-toggle",
                 n_clicks=0,
-                title="매일 Slack으로 주요 금융 뉴스 1건을 받습니다",
+                title="매일 Slack으로 주요 금융 뉴스를 받습니다. 클릭해서 ON/OFF",
                 style={
-                    "fontSize": "0.65rem", "fontWeight": "700",
-                    "padding": "3px 10px", "borderRadius": "20px",
+                    "fontSize": "0.75rem", "fontWeight": "700",
+                    "padding": "5px 14px", "borderRadius": "20px",
                     "cursor": "pointer", "border": "none",
+                    "letterSpacing": "0.2px",
                     "transition": "all 0.2s",
                 },
             ),
             html.Button(
-                "⚙",
+                "⚙ 설정",
                 id="daily-news-settings-btn",
                 n_clicks=0,
                 title="알림 시간 및 토픽 설정",
                 style={
-                    "fontSize": "0.75rem", "padding": "2px 7px",
-                    "borderRadius": "6px", "cursor": "pointer",
-                    "border": f"1px solid #{C['border']}",
-                    "background": "transparent",
-                    "color": f"#{C['muted']}", "marginLeft": "6px",
+                    "fontSize": "0.72rem", "fontWeight": "600",
+                    "padding": "5px 10px", "borderRadius": "8px",
+                    "cursor": "pointer",
+                    "border": f"1px solid #{C['blue']}55",
+                    "background": f"#{C['blue']}11",
+                    "color": f"#{C['blue']}", "marginLeft": "6px",
                     "transition": "all 0.2s",
                 },
             ),
         ], style={
             "display": "flex", "justifyContent": "flex-end",
-            "alignItems": "center", "padding": "2px 0 4px",
+            "alignItems": "center", "padding": "4px 0 6px",
+            "gap": "4px",
         }),
 
         # ── Settings panel (collapsed by default) ────────────────────────
@@ -3057,22 +3060,23 @@ def update_daily_news_toggle(settings):
     display_hour = _utc_to_kst(hour_utc) if tz == "KST" else hour_utc
 
     _base = {
-        "fontSize": "0.65rem", "fontWeight": "700",
-        "padding": "3px 10px", "borderRadius": "20px",
+        "fontSize": "0.75rem", "fontWeight": "700",
+        "padding": "5px 14px", "borderRadius": "20px",
         "cursor": "pointer", "transition": "all 0.2s",
+        "letterSpacing": "0.2px",
     }
     if subscribed:
-        btn_label = "🔔 Daily News: ON"
+        btn_label = "🔔 Daily News ON"
         btn_style = {**_base,
-                     "background": f"#{C['green']}22",
-                     "color": f"#{C['green']}",
-                     "border": f"1px solid #{C['green']}55"}
+                     "background": f"#{C['green']}",
+                     "color": "#0D0F14",
+                     "border": f"1px solid #{C['green']}"}
     else:
-        btn_label = "🔕 Daily News: OFF"
+        btn_label = "🔕 Daily News OFF"
         btn_style = {**_base,
-                     "background": f"#{C['card2']}",
+                     "background": "transparent",
                      "color": f"#{C['muted']}",
-                     "border": f"1px solid #{C['border']}"}
+                     "border": f"1px solid rgba(136,146,164,0.45)"}
     return btn_label, btn_style, display_hour, topics, tz
 
 

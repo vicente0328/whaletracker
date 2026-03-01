@@ -78,6 +78,100 @@ _ETF_SECTOR: dict[str, str] = {
     "HYG": "Fixed Income", "LQD": "Fixed Income",
 }
 
+# Static sector map for the most common S&P 500 / NASDAQ stocks (GICS-based).
+# Checked against FMP profile data. Used as instant fallback when APIs are
+# unavailable so sector auto-detection always works for popular tickers.
+_STOCK_SECTOR: dict[str, str] = {
+    # ── Technology ────────────────────────────────────────────────────────
+    "AAPL": "Technology", "MSFT": "Technology", "NVDA": "Technology",
+    "AVGO": "Technology", "ORCL": "Technology", "QCOM": "Technology",
+    "INTC": "Technology", "AMD": "Technology",  "TXN": "Technology",
+    "ADI":  "Technology", "MU":   "Technology", "AMAT": "Technology",
+    "LRCX": "Technology", "KLAC": "Technology", "MRVL": "Technology",
+    "CRM":  "Technology", "NOW":  "Technology", "ADBE": "Technology",
+    "INTU": "Technology", "SNPS": "Technology", "CDNS": "Technology",
+    "PANW": "Technology", "CRWD": "Technology", "FTNT": "Technology",
+    "SNOW": "Technology", "PLTR": "Technology", "DDOG": "Technology",
+    "ZS":   "Technology", "NET":  "Technology", "OKTA": "Technology",
+    "ANET": "Technology", "HPQ":  "Technology", "HPE":  "Technology",
+    "IBM":  "Technology", "ACN":  "Technology", "CTSH": "Technology",
+    "ITUB": "Technology", "TSM":  "Technology", "ASML": "Technology",
+    "SAP":  "Technology",
+    # ── Communication Services ────────────────────────────────────────────
+    "GOOGL": "Communication Services", "GOOG": "Communication Services",
+    "META":  "Communication Services", "NFLX": "Communication Services",
+    "DIS":   "Communication Services", "CMCSA": "Communication Services",
+    "T":     "Communication Services", "VZ":   "Communication Services",
+    "TMUS":  "Communication Services", "SNAP": "Communication Services",
+    "PINS":  "Communication Services", "RBLX": "Communication Services",
+    "EA":    "Communication Services", "TTWO": "Communication Services",
+    "WBD":   "Communication Services", "PARA": "Communication Services",
+    # ── Consumer Discretionary ────────────────────────────────────────────
+    "AMZN": "Consumer Discretionary", "TSLA": "Consumer Discretionary",
+    "HD":   "Consumer Discretionary", "MCD":  "Consumer Discretionary",
+    "SBUX": "Consumer Discretionary", "NKE":  "Consumer Discretionary",
+    "LOW":  "Consumer Discretionary", "TGT":  "Consumer Discretionary",
+    "BKNG": "Consumer Discretionary", "LULU": "Consumer Discretionary",
+    "ABNB": "Consumer Discretionary", "LYFT": "Consumer Discretionary",
+    "UBER": "Consumer Discretionary", "GM":   "Consumer Discretionary",
+    "F":    "Consumer Discretionary", "RIVN": "Consumer Discretionary",
+    "LCID": "Consumer Discretionary", "TJX":  "Consumer Discretionary",
+    "EBAY": "Consumer Discretionary", "ETSY": "Consumer Discretionary",
+    # ── Consumer Staples ──────────────────────────────────────────────────
+    "WMT": "Consumer Staples", "COST": "Consumer Staples",
+    "PG":  "Consumer Staples", "KO":   "Consumer Staples",
+    "PEP": "Consumer Staples", "PM":   "Consumer Staples",
+    "MO":  "Consumer Staples", "MDLZ": "Consumer Staples",
+    "CL":  "Consumer Staples", "GIS":  "Consumer Staples",
+    "KHC": "Consumer Staples", "STZ":  "Consumer Staples",
+    # ── Healthcare ────────────────────────────────────────────────────────
+    "LLY": "Healthcare", "JNJ":  "Healthcare", "UNH": "Healthcare",
+    "MRK": "Healthcare", "ABBV": "Healthcare", "PFE": "Healthcare",
+    "TMO": "Healthcare", "ABT":  "Healthcare", "DHR": "Healthcare",
+    "BMY": "Healthcare", "AMGN": "Healthcare", "GILD": "Healthcare",
+    "ISRG":"Healthcare", "REGN": "Healthcare", "VRTX": "Healthcare",
+    "BIIB":"Healthcare", "MRNA": "Healthcare", "CVS":  "Healthcare",
+    "CI":  "Healthcare", "HUM":  "Healthcare", "ELV": "Healthcare",
+    "MDT": "Healthcare", "SYK":  "Healthcare", "BSX": "Healthcare",
+    "ZTS": "Healthcare",
+    # ── Financials ────────────────────────────────────────────────────────
+    "BRK.B":"Financials", "BRK.A":"Financials",
+    "JPM": "Financials", "BAC":  "Financials", "WFC": "Financials",
+    "GS":  "Financials", "MS":   "Financials", "C":   "Financials",
+    "BLK": "Financials", "SCHW": "Financials", "AXP": "Financials",
+    "V":   "Financials", "MA":   "Financials", "PYPL": "Financials",
+    "COF": "Financials", "USB":  "Financials", "TFC": "Financials",
+    "PNC": "Financials", "CB":   "Financials", "MMC": "Financials",
+    "ICE": "Financials", "CME":  "Financials", "SPGI":"Financials",
+    "MCO": "Financials", "AFL":  "Financials", "AIG": "Financials",
+    "MET": "Financials", "PRU":  "Financials",
+    # ── Industrials ───────────────────────────────────────────────────────
+    "CAT": "Industrials", "GE":  "Industrials", "HON": "Industrials",
+    "UNP": "Industrials", "RTX": "Industrials", "LMT": "Industrials",
+    "BA":  "Industrials", "DE":  "Industrials", "MMM": "Industrials",
+    "UPS": "Industrials", "FDX": "Industrials", "CSX": "Industrials",
+    "NSC": "Industrials", "EMR": "Industrials", "ETN": "Industrials",
+    "PH":  "Industrials", "ROK": "Industrials", "NOC": "Industrials",
+    "GD":  "Industrials", "LHX": "Industrials",
+    # ── Energy ────────────────────────────────────────────────────────────
+    "XOM": "Energy", "CVX":  "Energy", "COP": "Energy",
+    "SLB": "Energy", "EOG":  "Energy", "PXD": "Energy",
+    "MPC": "Energy", "PSX":  "Energy", "VLO": "Energy",
+    "OXY": "Energy", "HAL":  "Energy", "DVN": "Energy",
+    # ── Materials ─────────────────────────────────────────────────────────
+    "LIN": "Materials", "APD": "Materials", "SHW": "Materials",
+    "FCX": "Materials", "NEM": "Materials", "NUE": "Materials",
+    "ALB": "Materials",
+    # ── Utilities ─────────────────────────────────────────────────────────
+    "NEE": "Utilities", "SO":  "Utilities", "DUK": "Utilities",
+    "D":   "Utilities", "AEP": "Utilities", "EXC": "Utilities",
+    "XEL": "Utilities", "SRE": "Utilities",
+    # ── Real Estate ───────────────────────────────────────────────────────
+    "PLD": "Real Estate", "AMT": "Real Estate", "EQIX": "Real Estate",
+    "CCI": "Real Estate", "PSA": "Real Estate", "O":   "Real Estate",
+    "WY":  "Real Estate", "SPG": "Real Estate", "DLR": "Real Estate",
+}
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -146,9 +240,11 @@ def fetch_sector(ticker: str) -> str | None:
     """
     t = ticker.upper()
 
-    # 1. ETF static map (instant, no API call needed)
+    # 1. Static maps (instant, no API call needed)
     if t in _ETF_SECTOR:
         return _ETF_SECTOR[t]
+    if t in _STOCK_SECTOR:
+        return _STOCK_SECTOR[t]
 
     now = datetime.utcnow()
 
