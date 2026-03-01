@@ -138,11 +138,15 @@ def fetch_live_prices(tickers: list[str]) -> dict[str, float]:
 def fetch_sector(ticker: str) -> str | None:
     """Return the GICS sector name for `ticker`. Returns None on failure.
 
-    Checks static ETF map first, then Alpha Vantage OVERVIEW (cached 24 h).
+    Priority:
+      1. Static ETF map (instant)
+      2. FMP profile endpoint (fast, reliable)
+      3. Alpha Vantage OVERVIEW (fallback, rate-limited)
+    Results cached 24 hours.
     """
     t = ticker.upper()
 
-    # ETF static map (instant, no API call needed)
+    # 1. ETF static map (instant, no API call needed)
     if t in _ETF_SECTOR:
         return _ETF_SECTOR[t]
 
@@ -154,7 +158,11 @@ def fetch_sector(ticker: str) -> str | None:
         if now - fetched_at < _SECTOR_TTL:
             return sector
 
-    sector = _av_sector(t)
+    # 2. FMP profile (primary — fast and reliable)
+    sector = _fmp_sector(t)
+    # 3. Alpha Vantage fallback
+    if not sector:
+        sector = _av_sector(t)
     if sector:
         _sector_cache[t] = (sector, now)
     return sector
@@ -206,6 +214,26 @@ def _fmp_batch_quote(tickers: list[str]) -> dict[str, float]:
     except Exception as exc:
         logger.debug("FMP batch quote failed: %s", exc)
         return {}
+
+
+def _fmp_sector(ticker: str) -> str | None:
+    """Fetch sector from FMP /profile endpoint. Returns GICS-style name or None."""
+    if not _FMP_KEY:
+        return None
+    try:
+        r = requests.get(
+            f"https://financialmodelingprep.com/api/v3/profile/{ticker}",
+            params={"apikey": _FMP_KEY},
+            timeout=8,
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data and isinstance(data, list):
+            sector = data[0].get("sector", "")
+            return sector.strip() if sector else None
+    except Exception as exc:
+        logger.debug("FMP profile %s failed: %s", ticker, exc)
+    return None
 
 
 # ---------------------------------------------------------------------------

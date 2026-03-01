@@ -1246,6 +1246,7 @@ _SECTORS = [
     "Technology", "Healthcare", "Financials", "Consumer Discretionary",
     "Consumer Staples", "Industrials", "Energy", "Materials",
     "Utilities", "Real Estate", "Communication Services",
+    "Diversified", "Fixed Income", "Commodities", "Other",
 ]
 
 
