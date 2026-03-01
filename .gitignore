@@ -20,10 +20,11 @@ env/
 ENV/
 
 # --- Data Cache ---
-data/*.json
+data/edgar_cache/          # per-accession XML cache — large, re-fetchable
 data/*.csv
 data/*.pkl
 !data/.gitkeep
+!data/historical_signals.json   # pre-computed backtest signals — must be committed
 
 # --- Streamlit ---
 .streamlit/secrets.toml

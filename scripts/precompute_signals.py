@@ -54,7 +54,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +97,28 @@ _EDGAR_HEADERS = {
     "Accept-Encoding": "gzip, deflate",
 }
 _EDGAR_RATE_S = 0.35   # pause between EDGAR requests (< 10 req/s policy)
+
+# ── Filing date cap ──────────────────────────────────────────────────────────
+# 13F-HR/A amendments can be filed months or years late, which would otherwise
+# push a quarter's signal_date far past when the original data became public.
+# We cap signal_date to report_date + CAP_DAYS so amended filings don't distort
+# the simulation timeline.
+_CAP_DAYS = 90   # 45-day legal deadline + 45 days tolerance
+
+def _cap_filed_date(report_date: str, filed_date: str) -> str:
+    """Return filed_date capped at report_date + CAP_DAYS.
+
+    This prevents late 13F-HR/A amendments from pushing a quarter's
+    signal_date months into the future and colliding with other quarters.
+    """
+    try:
+        rdt = datetime.strptime(report_date, "%Y-%m-%d")
+        fdt = datetime.strptime(filed_date,  "%Y-%m-%d")
+        cap = rdt + timedelta(days=_CAP_DAYS)
+        return min(fdt, cap).strftime("%Y-%m-%d")
+    except Exception:
+        return filed_date
+
 
 # ── Signal scoring (mirrors analysis_engine.py) ───────────────────────────────
 _SIG_SCORE = {
@@ -192,22 +214,52 @@ def _cache_path(accession: str) -> Path:
     return CACHE_DIR / f"{safe}.json"
 
 
+def _deduplicate_holdings(holdings: list[dict]) -> list[dict]:
+    """Merge duplicate ticker entries into one (keep highest value_usd entry).
+
+    13F XMLs commonly list the same company multiple times under different
+    security types (e.g., common stock, call options, put options) or share
+    classes that resolve to the same ticker symbol.  Without deduplication
+    the signal scores are artificially inflated (e.g., AAPL scoring 85 from
+    a single whale instead of a realistic 6–9).
+
+    We keep only the entry with the highest value_usd per ticker (most likely
+    the underlying equity position rather than an option overlay), then
+    recompute portfolio_pct based on the deduplicated total.
+    """
+    best: dict[str, dict] = {}
+    for h in holdings:
+        t = h.get("ticker", "")
+        if not t:
+            continue
+        if t not in best or h.get("value_usd", 0) > best[t].get("value_usd", 0):
+            best[t] = h
+    total = sum(h.get("value_usd", 0) for h in best.values())
+    return [
+        {**h, "portfolio_pct": h["value_usd"] / total if total else 0}
+        for h in sorted(best.values(), key=lambda x: x.get("value_usd", 0), reverse=True)
+    ]
+
+
 def load_holdings_cached(
     cik: str,
     acc_info: dict,
     use_cache: bool = True,
 ) -> list[dict]:
     """
-    Return parsed holdings for `acc_info`, using local JSON cache when available.
+    Return parsed + deduplicated holdings for `acc_info`.
 
-    On cache miss: fetches the XML from EDGAR, parses it, writes the cache.
+    Uses local JSON cache (data/edgar_cache/) when available.
+    On cache miss: fetches the XML from EDGAR, deduplicates, writes cache.
     Returns [] on any error.
     """
     path = _cache_path(acc_info["accession"])
 
     if use_cache and path.exists():
         try:
-            return json.loads(path.read_text())
+            raw = json.loads(path.read_text())
+            # Apply dedup even on cache hits — old cache files may be undeduped
+            return _deduplicate_holdings(raw)
         except Exception:
             pass   # corrupt cache — re-fetch
 
@@ -218,11 +270,13 @@ def load_holdings_cached(
         if not xml_url:
             logger.debug("No holdings doc URL for %s", acc_info["accession"])
             return []
-        holdings = _parse_13f_xml(xml_url)
+        raw_holdings = _parse_13f_xml(xml_url)
         time.sleep(_EDGAR_RATE_S)
     except Exception as exc:
         logger.warning("Holdings fetch failed for %s: %s", acc_info["accession"], exc)
         return []
+
+    holdings = _deduplicate_holdings(raw_holdings)
 
     if use_cache:
         try:
@@ -337,9 +391,11 @@ def build_quarter_map(
         for acc_info in whale_accessions.get(whale, []):
             rdate = acc_info["report_date"]
             fdate = acc_info["filed_date"]
+            # Cap filed_date to prevent late amendments from distorting signal_date
+            capped_fdate = _cap_filed_date(rdate, fdate)
             if rdate not in quarter_map:
                 quarter_map[rdate] = {"filed_dates": [], "members": []}
-            quarter_map[rdate]["filed_dates"].append(fdate)
+            quarter_map[rdate]["filed_dates"].append(capped_fdate)
             quarter_map[rdate]["members"].append((whale, cik, acc_info))
 
     # Remove quarters where we never get a signal_date >= cutoff

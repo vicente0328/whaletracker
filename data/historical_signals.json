@@ -1,0 +1,4484 @@
+{
+  "meta": {
+    "computed_at": "2026-03-01T12:20:19.190143+00:00",
+    "years_covered": 3,
+    "cutoff_date": "2023-03-01",
+    "quarters_computed": 12,
+    "whales": [
+      "Berkshire Hathaway",
+      "Bridgewater Associates",
+      "Viking Global",
+      "Pershing Square",
+      "Appaloosa Management",
+      "Third Point",
+      "Elliott Management",
+      "Tiger Global",
+      "Coatue Management",
+      "D.E. Shaw",
+      "Two Sigma",
+      "Citadel Advisors"
+    ],
+    "strong_buy_threshold": 6,
+    "buy_threshold": 3,
+    "schema_version": "1.0"
+  },
+  "quarters": [
+    {
+      "report_date": "2023-03-31",
+      "signal_date": "2023-05-15",
+      "first_filed": "2023-05-12",
+      "label": "Q1 2023",
+      "whale_coverage": 7,
+      "tickers": {
+        "GOOGL": {
+          "score": 14.2,
+          "company": "Alphabet Inc",
+          "whale_count": 4,
+          "whales": [
+            "Pershing Square",
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "DHR": {
+          "score": 5.1,
+          "company": "Danaher Corporation",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MSFT": {
+          "score": 7.1000000000000005,
+          "company": "Microsoft Corp",
+          "whale_count": 3,
+          "whales": [
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CRM": {
+          "score": 6.3,
+          "company": "Salesforce Inc",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UNH": {
+          "score": 5.1,
+          "company": "Unitedhealth Group Inc",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AMD": {
+          "score": 6.3,
+          "company": "Advanced Micro Devices Inc",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "META": {
+          "score": 4.7,
+          "company": "Meta Platforms Inc",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AMZN": {
+          "score": 4.7,
+          "company": "Amazon Com Inc",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NOW": {
+          "score": 4.7,
+          "company": "Servicenow Inc",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "DDOG": {
+          "score": 6.7,
+          "company": "Datadog Inc",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AAPL": {
+          "score": 5.7,
+          "company": "Apple Inc",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "LRCX": {
+          "score": 5.7,
+          "company": "Lam Research Corp",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NVDA": {
+          "score": 5.7,
+          "company": "Nvidia Corporation",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "TSLA": {
+          "score": 2.7,
+          "company": "Tesla Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "V": {
+          "score": 2.7,
+          "company": "Visa Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "WMT": {
+          "score": 2.7,
+          "company": "Walmart Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "XOM": {
+          "score": 2.7,
+          "company": "Exxon Mobil Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "C": {
+          "score": 2.7,
+          "company": "Citigroup Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "JNJ": {
+          "score": 2.7,
+          "company": "Johnson & Johnson",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "PFE": {
+          "score": 2.7,
+          "company": "Pfizer Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "AXP": {
+          "score": 2.7,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "SPY": {
+          "score": 2.7,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "ABNB": {
+          "score": 2.7,
+          "company": "Airbnb Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "BA": {
+          "score": 2.7,
+          "company": "Boeing Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MA": {
+          "score": 2.7,
+          "company": "Mastercard Incorporated",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "INTC": {
+          "score": 2.7,
+          "company": "Intel Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MRK": {
+          "score": 2.7,
+          "company": "Merck & Co Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "AVGO": {
+          "score": 2.7,
+          "company": "Broadcom Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "GS": {
+          "score": 2.7,
+          "company": "Goldman Sachs Group Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "CVX": {
+          "score": 2.7,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "QCOM": {
+          "score": 2.7,
+          "company": "Qualcomm Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "LMT": {
+          "score": 2.7,
+          "company": "Lockheed Martin Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "NKE": {
+          "score": 2.7,
+          "company": "Nike Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "WFC": {
+          "score": 2.7,
+          "company": "Wells Fargo Co New",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "BRK-B": {
+          "score": 2.7,
+          "company": "Berkshire Hathaway Inc Del",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "JPM": {
+          "score": 2.7,
+          "company": "Jpmorgan Chase & Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "KO": {
+          "score": 2.7,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "ABBV": {
+          "score": 2.7,
+          "company": "Abbvie Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "SBUX": {
+          "score": 2.7,
+          "company": "Starbucks Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "HD": {
+          "score": 2.7,
+          "company": "Home Depot Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "UBER": {
+          "score": 2.7,
+          "company": "Uber Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "TGT": {
+          "score": 2.7,
+          "company": "Target Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "SNOW": {
+          "score": 2.7,
+          "company": "Snowflake Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "CAT": {
+          "score": 2.7,
+          "company": "Caterpillar Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "PEP": {
+          "score": 2.7,
+          "company": "Pepsico Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "UPS": {
+          "score": 2.7,
+          "company": "United Parcel Service Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MCD": {
+          "score": 2.7,
+          "company": "Mcdonalds Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "ISRG": {
+          "score": 2.7,
+          "company": "Intuitive Surgical Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "COP": {
+          "score": 2.7,
+          "company": "Conocophillips",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MS": {
+          "score": 2.7,
+          "company": "Morgan Stanley",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "ORCL": {
+          "score": 2.7,
+          "company": "Oracle Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "BLK": {
+          "score": 2.7,
+          "company": "Blackrock Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "ELV": {
+          "score": 2.7,
+          "company": "Elevance Health Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "CI": {
+          "score": 2.7,
+          "company": "The Cigna Group",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MMM": {
+          "score": 2.7,
+          "company": "3M Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "PLTR": {
+          "score": 2.7,
+          "company": "Palantir Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "DE": {
+          "score": 2.7,
+          "company": "Deere & Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "HES": {
+          "score": 2.7,
+          "company": "Hess Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "CTRA": {
+          "score": 2.7,
+          "company": "Coterra Energy Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "TMO": {
+          "score": 2.7,
+          "company": "Thermo Fisher Scientific Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MRO": {
+          "score": 2.7,
+          "company": "Marathon Oil Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        },
+        "GEHC": {
+          "score": 2.7,
+          "company": "Ge Healthcare Technologies I",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "HOLD"
+        }
+      }
+    },
+    {
+      "report_date": "2023-06-30",
+      "signal_date": "2023-08-14",
+      "first_filed": "2023-08-11",
+      "label": "Q2 2023",
+      "whale_coverage": 7,
+      "tickers": {
+        "DHR": {
+          "score": 2.4,
+          "company": "Danaher Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "AMZN": {
+          "score": 3.5999999999999996,
+          "company": "Amazon Com Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MSFT": {
+          "score": 4.8,
+          "company": "Microsoft Corp",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NVDA": {
+          "score": 3.5999999999999996,
+          "company": "Nvidia Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GOOGL": {
+          "score": 2.4,
+          "company": "Alphabet Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "AMD": {
+          "score": 2.4,
+          "company": "Advanced Micro Devices Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "UBER": {
+          "score": 3.5999999999999996,
+          "company": "Uber Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2023-09-30",
+      "signal_date": "2023-12-29",
+      "first_filed": "2023-11-13",
+      "label": "Q3 2023",
+      "whale_coverage": 10,
+      "tickers": {
+        "AAPL": {
+          "score": 4.5,
+          "company": "Apple Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AXP": {
+          "score": 4.5,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "KO": {
+          "score": 4.5,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 4.5,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "V": {
+          "score": 4.5,
+          "company": "Visa Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MA": {
+          "score": 4.5,
+          "company": "Mastercard Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "C": {
+          "score": 4.5,
+          "company": "Citigroup Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AMZN": {
+          "score": 9.9,
+          "company": "Amazon Com Inc",
+          "whale_count": 3,
+          "whales": [
+            "Berkshire Hathaway",
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SNOW": {
+          "score": 7.5,
+          "company": "Snowflake Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SPY": {
+          "score": 4.5,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MSFT": {
+          "score": 7.8,
+          "company": "Microsoft Corp",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "DHR": {
+          "score": 2.4,
+          "company": "Danaher Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "META": {
+          "score": 6.6,
+          "company": "Meta Platforms Inc",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UBER": {
+          "score": 7.8,
+          "company": "Uber Technologies Inc",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "GOOGL": {
+          "score": 3.0,
+          "company": "Alphabet Inc",
+          "whale_count": 1,
+          "whales": [
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LLY": {
+          "score": 3.0,
+          "company": "Eli Lilly & Co",
+          "whale_count": 1,
+          "whales": [
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NVDA": {
+          "score": 3.0,
+          "company": "Nvidia Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NOW": {
+          "score": 3.0,
+          "company": "Servicenow Inc",
+          "whale_count": 1,
+          "whales": [
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LRCX": {
+          "score": 3.0,
+          "company": "Lam Research Corp",
+          "whale_count": 1,
+          "whales": [
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DDOG": {
+          "score": 3.0,
+          "company": "Datadog Inc",
+          "whale_count": 1,
+          "whales": [
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2023-12-31",
+      "signal_date": "2024-03-30",
+      "first_filed": "2024-02-09",
+      "label": "Q4 2023",
+      "whale_coverage": 10,
+      "tickers": {
+        "AAPL": {
+          "score": 6.6,
+          "company": "Apple Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AXP": {
+          "score": 6.6,
+          "company": "American Express Co",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "KO": {
+          "score": 6.6,
+          "company": "Coca Cola Co",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "JNJ": {
+          "score": 3.5999999999999996,
+          "company": "Johnson & Johnson",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PEP": {
+          "score": 3.5999999999999996,
+          "company": "Pepsico Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MCD": {
+          "score": 3.5999999999999996,
+          "company": "Mcdonalds Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "WMT": {
+          "score": 3.5999999999999996,
+          "company": "Walmart Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SPY": {
+          "score": 3.5999999999999996,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GOOGL": {
+          "score": 5.6,
+          "company": "Alphabet Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "V": {
+          "score": 3.5999999999999996,
+          "company": "Visa Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "META": {
+          "score": 8.0,
+          "company": "Meta Platforms Inc",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SBUX": {
+          "score": 3.5999999999999996,
+          "company": "Starbucks Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MRK": {
+          "score": 3.5999999999999996,
+          "company": "Merck & Co Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LLY": {
+          "score": 5.6,
+          "company": "Eli Lilly & Co",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ISRG": {
+          "score": 3.5999999999999996,
+          "company": "Intuitive Surgical Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NVDA": {
+          "score": 5.6,
+          "company": "Nvidia Corporation",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MA": {
+          "score": 3.5999999999999996,
+          "company": "Mastercard Incorporated",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CI": {
+          "score": 3.5999999999999996,
+          "company": "The Cigna Group",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "TGT": {
+          "score": 3.5999999999999996,
+          "company": "Target Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ABBV": {
+          "score": 3.5999999999999996,
+          "company": "Abbvie Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MSFT": {
+          "score": 8.0,
+          "company": "Microsoft Corp",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ELV": {
+          "score": 3.5999999999999996,
+          "company": "Elevance Health Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "UBER": {
+          "score": 3.5999999999999996,
+          "company": "Uber Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PFE": {
+          "score": 3.5999999999999996,
+          "company": "Pfizer Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CTRA": {
+          "score": 3.5999999999999996,
+          "company": "Coterra Energy Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "C": {
+          "score": 3.5999999999999996,
+          "company": "Citigroup Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "WFC": {
+          "score": 3.5999999999999996,
+          "company": "Wells Fargo Co New",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MRO": {
+          "score": 3.5999999999999996,
+          "company": "Marathon Oil Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "XOM": {
+          "score": 3.5999999999999996,
+          "company": "Exxon Mobil Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MMM": {
+          "score": 3.5999999999999996,
+          "company": "3M Co",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 3.5999999999999996,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "QCOM": {
+          "score": 3.5999999999999996,
+          "company": "Qualcomm Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LRCX": {
+          "score": 3.5999999999999996,
+          "company": "Lam Research Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "HES": {
+          "score": 3.5999999999999996,
+          "company": "Hess Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ADBE": {
+          "score": 3.5999999999999996,
+          "company": "Adobe Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DHR": {
+          "score": 6.0,
+          "company": "Danaher Corporation",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "PLTR": {
+          "score": 3.5999999999999996,
+          "company": "Palantir Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CRM": {
+          "score": 3.5999999999999996,
+          "company": "Salesforce Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ABNB": {
+          "score": 3.5999999999999996,
+          "company": "Airbnb Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AVGO": {
+          "score": 6.6,
+          "company": "Broadcom Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SNOW": {
+          "score": 3.5999999999999996,
+          "company": "Snowflake Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CAT": {
+          "score": 3.5999999999999996,
+          "company": "Caterpillar Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "BRK-B": {
+          "score": 3.5999999999999996,
+          "company": "Berkshire Hathaway Inc Del",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "HD": {
+          "score": 3.5999999999999996,
+          "company": "Home Depot Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MS": {
+          "score": 3.5999999999999996,
+          "company": "Morgan Stanley",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ORCL": {
+          "score": 3.5999999999999996,
+          "company": "Oracle Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GS": {
+          "score": 3.5999999999999996,
+          "company": "Goldman Sachs Group Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "COP": {
+          "score": 3.5999999999999996,
+          "company": "Conocophillips",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AMZN": {
+          "score": 6.4,
+          "company": "Amazon Com Inc",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2024-03-31",
+      "signal_date": "2024-06-29",
+      "first_filed": "2024-05-13",
+      "label": "Q1 2024",
+      "whale_coverage": 10,
+      "tickers": {
+        "AAPL": {
+          "score": 7.8,
+          "company": "Apple Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AXP": {
+          "score": 7.8,
+          "company": "American Express Co",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "KO": {
+          "score": 5.4,
+          "company": "Coca Cola Co",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CVX": {
+          "score": 3.0,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "GOOGL": {
+          "score": 12.299999999999999,
+          "company": "Alphabet Inc",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Pershing Square",
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NVDA": {
+          "score": 4.8,
+          "company": "Nvidia Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "META": {
+          "score": 7.199999999999999,
+          "company": "Meta Platforms Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "JNJ": {
+          "score": 2.4,
+          "company": "Johnson & Johnson",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "WMT": {
+          "score": 4.8,
+          "company": "Walmart Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PEP": {
+          "score": 2.4,
+          "company": "Pepsico Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "SPY": {
+          "score": 2.4,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MSFT": {
+          "score": 7.199999999999999,
+          "company": "Microsoft Corp",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AMZN": {
+          "score": 8.399999999999999,
+          "company": "Amazon Com Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MA": {
+          "score": 4.8,
+          "company": "Mastercard Incorporated",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AMD": {
+          "score": 3.5999999999999996,
+          "company": "Advanced Micro Devices Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "UBER": {
+          "score": 4.8,
+          "company": "Uber Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ADBE": {
+          "score": 4.8,
+          "company": "Adobe Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LRCX": {
+          "score": 4.8,
+          "company": "Lam Research Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "WFC": {
+          "score": 4.8,
+          "company": "Wells Fargo Co New",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CRM": {
+          "score": 4.8,
+          "company": "Salesforce Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "C": {
+          "score": 4.8,
+          "company": "Citigroup Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SPGI": {
+          "score": 7.199999999999999,
+          "company": "S&P Global Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "HES": {
+          "score": 4.8,
+          "company": "Hess Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "INTC": {
+          "score": 3.5999999999999996,
+          "company": "Intel Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SNOW": {
+          "score": 4.8,
+          "company": "Snowflake Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AVGO": {
+          "score": 4.8,
+          "company": "Broadcom Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GS": {
+          "score": 8.399999999999999,
+          "company": "Goldman Sachs Group Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NKE": {
+          "score": 3.5999999999999996,
+          "company": "Nike Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LMT": {
+          "score": 3.5999999999999996,
+          "company": "Lockheed Martin Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GEHC": {
+          "score": 3.5999999999999996,
+          "company": "Ge Healthcare Technologies I",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ORCL": {
+          "score": 4.8,
+          "company": "Oracle Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DHR": {
+          "score": 2.4,
+          "company": "Danaher Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        }
+      }
+    },
+    {
+      "report_date": "2024-06-30",
+      "signal_date": "2024-08-14",
+      "first_filed": "2024-08-13",
+      "label": "Q2 2024",
+      "whale_coverage": 8,
+      "tickers": {
+        "AAPL": {
+          "score": 9.9,
+          "company": "Apple Inc",
+          "whale_count": 3,
+          "whales": [
+            "Berkshire Hathaway",
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AXP": {
+          "score": 4.5,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "KO": {
+          "score": 4.5,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 4.5,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "V": {
+          "score": 7.1,
+          "company": "Visa Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Viking Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "C": {
+          "score": 4.5,
+          "company": "Citigroup Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MA": {
+          "score": 7.1,
+          "company": "Mastercard Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Viking Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AMZN": {
+          "score": 6.9,
+          "company": "Amazon Com Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SPY": {
+          "score": 4.5,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DHR": {
+          "score": 8.6,
+          "company": "Danaher Corporation",
+          "whale_count": 3,
+          "whales": [
+            "Viking Global",
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ABNB": {
+          "score": 7.5,
+          "company": "Airbnb Inc",
+          "whale_count": 2,
+          "whales": [
+            "Viking Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "GOOGL": {
+          "score": 5.0,
+          "company": "Alphabet Inc",
+          "whale_count": 2,
+          "whales": [
+            "Pershing Square",
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NKE": {
+          "score": 7.5,
+          "company": "Nike Inc",
+          "whale_count": 2,
+          "whales": [
+            "Pershing Square",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "BRK-B": {
+          "score": 2.2,
+          "company": "Berkshire Hathaway Inc Del",
+          "whale_count": 1,
+          "whales": [
+            "Appaloosa Management"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MSFT": {
+          "score": 4.2,
+          "company": "Microsoft Corp",
+          "whale_count": 2,
+          "whales": [
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "META": {
+          "score": 2.4,
+          "company": "Meta Platforms Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "UBER": {
+          "score": 4.8,
+          "company": "Uber Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "HES": {
+          "score": 3.5999999999999996,
+          "company": "Hess Corp",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NVDA": {
+          "score": 3.6,
+          "company": "Nvidia Corporation",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ADBE": {
+          "score": 3.6,
+          "company": "Adobe Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AVGO": {
+          "score": 3.6,
+          "company": "Broadcom Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "UNH": {
+          "score": 3.6,
+          "company": "Unitedhealth Group Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "INTC": {
+          "score": 3.6,
+          "company": "Intel Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PLTR": {
+          "score": 3.6,
+          "company": "Palantir Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SNOW": {
+          "score": 3.6,
+          "company": "Snowflake Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "QCOM": {
+          "score": 3.6,
+          "company": "Qualcomm Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CAT": {
+          "score": 3.6,
+          "company": "Caterpillar Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "JNJ": {
+          "score": 3.6,
+          "company": "Johnson & Johnson",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DDOG": {
+          "score": 3.6,
+          "company": "Datadog Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ABBV": {
+          "score": 3.6,
+          "company": "Abbvie Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MCD": {
+          "score": 3.6,
+          "company": "Mcdonalds Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "TMO": {
+          "score": 3.6,
+          "company": "Thermo Fisher Scientific Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "COP": {
+          "score": 3.6,
+          "company": "Conocophillips",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CTRA": {
+          "score": 3.6,
+          "company": "Coterra Energy Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2024-09-30",
+      "signal_date": "2024-11-14",
+      "first_filed": "2024-11-13",
+      "label": "Q3 2024",
+      "whale_coverage": 8,
+      "tickers": {
+        "AXP": {
+          "score": 3.0,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "AAPL": {
+          "score": 3.0,
+          "company": "Apple Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "KO": {
+          "score": 3.0,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 3.0,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2024-12-31",
+      "signal_date": "2025-03-31",
+      "first_filed": "2025-02-13",
+      "label": "Q4 2024",
+      "whale_coverage": 9,
+      "tickers": {
+        "AXP": {
+          "score": 3.0,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "AAPL": {
+          "score": 3.0,
+          "company": "Apple Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "KO": {
+          "score": 3.0,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 3.0,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2025-03-31",
+      "signal_date": "2025-06-29",
+      "first_filed": "2025-05-13",
+      "label": "Q1 2025",
+      "whale_coverage": 9,
+      "tickers": {
+        "AXP": {
+          "score": 3.0,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "AAPL": {
+          "score": 3.0,
+          "company": "Apple Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "KO": {
+          "score": 3.0,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 3.0,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "AMZN": {
+          "score": 3.5999999999999996,
+          "company": "Amazon Com Inc",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SPY": {
+          "score": 3.5999999999999996,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NVDA": {
+          "score": 3.5999999999999996,
+          "company": "Nvidia Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MSFT": {
+          "score": 3.5999999999999996,
+          "company": "Microsoft Corp",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "HES": {
+          "score": 3.5999999999999996,
+          "company": "Hess Corp",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2025-06-30",
+      "signal_date": "2025-08-14",
+      "first_filed": "2025-08-13",
+      "label": "Q2 2025",
+      "whale_coverage": 8,
+      "tickers": {
+        "AXP": {
+          "score": 3.0,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "AAPL": {
+          "score": 9.9,
+          "company": "Apple Inc",
+          "whale_count": 3,
+          "whales": [
+            "Berkshire Hathaway",
+            "Appaloosa Management",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "KO": {
+          "score": 3.0,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 6.6,
+          "company": "Chevron Corp New",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UNH": {
+          "score": 4.5,
+          "company": "Unitedhealth Group Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SPY": {
+          "score": 4.2,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NVDA": {
+          "score": 13.2,
+          "company": "Nvidia Corporation",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "GOOGL": {
+          "score": 7.4,
+          "company": "Alphabet Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Pershing Square"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MSFT": {
+          "score": 11.4,
+          "company": "Microsoft Corp",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "META": {
+          "score": 8.399999999999999,
+          "company": "Meta Platforms Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CRM": {
+          "score": 4.8,
+          "company": "Salesforce Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "JNJ": {
+          "score": 8.4,
+          "company": "Johnson & Johnson",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UBER": {
+          "score": 7.4,
+          "company": "Uber Technologies Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Pershing Square"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AVGO": {
+          "score": 4.8,
+          "company": "Broadcom Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ADBE": {
+          "score": 4.8,
+          "company": "Adobe Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ABBV": {
+          "score": 8.4,
+          "company": "Abbvie Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "XOM": {
+          "score": 4.8,
+          "company": "Exxon Mobil Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MRK": {
+          "score": 4.8,
+          "company": "Merck & Co Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ABNB": {
+          "score": 4.8,
+          "company": "Airbnb Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "COP": {
+          "score": 4.8,
+          "company": "Conocophillips",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "AMZN": {
+          "score": 6.300000000000001,
+          "company": "Amazon Com Inc",
+          "whale_count": 2,
+          "whales": [
+            "Pershing Square",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "BRK-B": {
+          "score": 3.3000000000000003,
+          "company": "Berkshire Hathaway Inc Del",
+          "whale_count": 1,
+          "whales": [
+            "Appaloosa Management"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DHR": {
+          "score": 3.5999999999999996,
+          "company": "Danaher Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "TSLA": {
+          "score": 3.6,
+          "company": "Tesla Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "TMO": {
+          "score": 3.6,
+          "company": "Thermo Fisher Scientific Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MA": {
+          "score": 3.6,
+          "company": "Mastercard Incorporated",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "JPM": {
+          "score": 3.6,
+          "company": "Jpmorgan Chase & Co.",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CI": {
+          "score": 3.6,
+          "company": "The Cigna Group",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "WFC": {
+          "score": 3.6,
+          "company": "Wells Fargo Co New",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "WMT": {
+          "score": 3.6,
+          "company": "Walmart Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ELV": {
+          "score": 3.6,
+          "company": "Elevance Health Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MCD": {
+          "score": 3.6,
+          "company": "Mcdonalds Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ORCL": {
+          "score": 3.6,
+          "company": "Oracle Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PEP": {
+          "score": 3.6,
+          "company": "Pepsico Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GEHC": {
+          "score": 3.6,
+          "company": "Ge Healthcare Technologies I",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "TGT": {
+          "score": 3.6,
+          "company": "Target Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DDOG": {
+          "score": 3.6,
+          "company": "Datadog Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SPGI": {
+          "score": 3.6,
+          "company": "S&P Global Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2025-09-30",
+      "signal_date": "2025-11-14",
+      "first_filed": "2025-11-13",
+      "label": "Q3 2025",
+      "whale_coverage": 8,
+      "tickers": {
+        "AXP": {
+          "score": 8.1,
+          "company": "American Express Co",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AAPL": {
+          "score": 6.3,
+          "company": "Apple Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "KO": {
+          "score": 8.1,
+          "company": "Coca Cola Co",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CVX": {
+          "score": 8.1,
+          "company": "Chevron Corp New",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "GOOGL": {
+          "score": 11.5,
+          "company": "Alphabet Inc",
+          "whale_count": 4,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates",
+            "Pershing Square",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "V": {
+          "score": 8.4,
+          "company": "Visa Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "Viking Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MA": {
+          "score": 13.200000000000001,
+          "company": "Mastercard Inc",
+          "whale_count": 3,
+          "whales": [
+            "Berkshire Hathaway",
+            "Bridgewater Associates",
+            "Viking Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AMZN": {
+          "score": 11.5,
+          "company": "Amazon Com Inc",
+          "whale_count": 4,
+          "whales": [
+            "Berkshire Hathaway",
+            "Pershing Square",
+            "Third Point",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UNH": {
+          "score": 8.1,
+          "company": "Unitedhealth Group Inc",
+          "whale_count": 2,
+          "whales": [
+            "Berkshire Hathaway",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SPY": {
+          "score": 7.8,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MSFT": {
+          "score": 12.799999999999999,
+          "company": "Microsoft Corp",
+          "whale_count": 4,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CRM": {
+          "score": 8.4,
+          "company": "Salesforce Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NVDA": {
+          "score": 8.6,
+          "company": "Nvidia Corporation",
+          "whale_count": 4,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "LRCX": {
+          "score": 8.4,
+          "company": "Lam Research Corp",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ADBE": {
+          "score": 8.4,
+          "company": "Adobe Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NOW": {
+          "score": 8.4,
+          "company": "Servicenow Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ORCL": {
+          "score": 4.8,
+          "company": "Oracle Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LMT": {
+          "score": 7.199999999999999,
+          "company": "Lockheed Martin Corp",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ABNB": {
+          "score": 12.299999999999999,
+          "company": "Airbnb Inc",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Viking Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "PLTR": {
+          "score": 5.3999999999999995,
+          "company": "Palantir Technologies Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "MCD": {
+          "score": 4.8,
+          "company": "Mcdonalds Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LLY": {
+          "score": 7.199999999999999,
+          "company": "Eli Lilly & Co",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SNOW": {
+          "score": 4.8,
+          "company": "Snowflake Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "GS": {
+          "score": 3.5999999999999996,
+          "company": "Goldman Sachs Group Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "BLK": {
+          "score": 7.199999999999999,
+          "company": "Blackrock Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "DDOG": {
+          "score": 7.199999999999999,
+          "company": "Datadog Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "BA": {
+          "score": 7.199999999999999,
+          "company": "Boeing Co",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "DHR": {
+          "score": 3.9000000000000004,
+          "company": "Danaher Corporation",
+          "whale_count": 1,
+          "whales": [
+            "Viking Global"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "BRK-B": {
+          "score": 9.700000000000001,
+          "company": "Berkshire Hathaway Inc Del",
+          "whale_count": 3,
+          "whales": [
+            "Viking Global",
+            "Appaloosa Management",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UBER": {
+          "score": 6.2,
+          "company": "Uber Technologies Inc",
+          "whale_count": 2,
+          "whales": [
+            "Pershing Square",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "META": {
+          "score": 10.4,
+          "company": "Meta Platforms Inc",
+          "whale_count": 3,
+          "whales": [
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AVGO": {
+          "score": 5.6,
+          "company": "Broadcom Inc",
+          "whale_count": 2,
+          "whales": [
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "TSLA": {
+          "score": 1.8,
+          "company": "Tesla Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "ISRG": {
+          "score": 3.6,
+          "company": "Intuitive Surgical Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "WMT": {
+          "score": 3.6,
+          "company": "Walmart Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "INTC": {
+          "score": 3.6,
+          "company": "Intel Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "C": {
+          "score": 3.6,
+          "company": "Citigroup Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "XOM": {
+          "score": 3.6,
+          "company": "Exxon Mobil Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "HD": {
+          "score": 3.6,
+          "company": "Home Depot Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MS": {
+          "score": 3.6,
+          "company": "Morgan Stanley",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "SBUX": {
+          "score": 3.6,
+          "company": "Starbucks Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "UPS": {
+          "score": 3.6,
+          "company": "United Parcel Service Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "CTRA": {
+          "score": 3.6,
+          "company": "Coterra Energy Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    },
+    {
+      "report_date": "2025-12-31",
+      "signal_date": "2026-02-17",
+      "first_filed": "2026-02-12",
+      "label": "Q4 2025",
+      "whale_coverage": 9,
+      "tickers": {
+        "AXP": {
+          "score": 3.0,
+          "company": "American Express Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "AAPL": {
+          "score": 3.0,
+          "company": "Apple Inc",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "KO": {
+          "score": 3.0,
+          "company": "Coca Cola Co",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "CVX": {
+          "score": 3.0,
+          "company": "Chevron Corp New",
+          "whale_count": 1,
+          "whales": [
+            "Berkshire Hathaway"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "BUY"
+        },
+        "SPY": {
+          "score": 8.4,
+          "company": "Spdr S&P 500 Etf Tr",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NVDA": {
+          "score": 11.0,
+          "company": "Nvidia Corporation",
+          "whale_count": 4,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "LRCX": {
+          "score": 2.4,
+          "company": "Lam Research Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "CRM": {
+          "score": 2.4,
+          "company": "Salesforce Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "GOOGL": {
+          "score": 7.0,
+          "company": "Alphabet Inc",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Pershing Square",
+            "Tiger Global"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AMZN": {
+          "score": 18.0,
+          "company": "Amazon Com Inc",
+          "whale_count": 5,
+          "whales": [
+            "Bridgewater Associates",
+            "Pershing Square",
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "AVGO": {
+          "score": 6.8,
+          "company": "Broadcom Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Tiger Global"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "ORCL": {
+          "score": 8.4,
+          "company": "Oracle Corp",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "NOW": {
+          "score": 12.4,
+          "company": "Servicenow Inc",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "LLY": {
+          "score": 4.8,
+          "company": "Eli Lilly & Co",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "ABNB": {
+          "score": 7.4,
+          "company": "Airbnb Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Viking Global"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SPGI": {
+          "score": 8.4,
+          "company": "S&P Global Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CAT": {
+          "score": 3.5999999999999996,
+          "company": "Caterpillar Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DHR": {
+          "score": 8.399999999999999,
+          "company": "Danaher Corporation",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "SBUX": {
+          "score": 4.8,
+          "company": "Starbucks Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "BLK": {
+          "score": 8.4,
+          "company": "Blackrock Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "TGT": {
+          "score": 11.7,
+          "company": "Target Corp",
+          "whale_count": 3,
+          "whales": [
+            "Bridgewater Associates",
+            "Appaloosa Management",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY",
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UPS": {
+          "score": 3.5999999999999996,
+          "company": "United Parcel Service Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "NKE": {
+          "score": 3.5999999999999996,
+          "company": "Nike Inc",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MS": {
+          "score": 3.5999999999999996,
+          "company": "Morgan Stanley",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "UNH": {
+          "score": 7.199999999999999,
+          "company": "Unitedhealth Group Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "TMO": {
+          "score": 7.199999999999999,
+          "company": "Thermo Fisher Scientific Inc",
+          "whale_count": 2,
+          "whales": [
+            "Bridgewater Associates",
+            "Third Point"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "INTC": {
+          "score": 3.5999999999999996,
+          "company": "Intel Corp",
+          "whale_count": 1,
+          "whales": [
+            "Bridgewater Associates"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MA": {
+          "score": 2.6,
+          "company": "Mastercard Incorporated",
+          "whale_count": 1,
+          "whales": [
+            "Viking Global"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "V": {
+          "score": 6.2,
+          "company": "Visa Inc",
+          "whale_count": 2,
+          "whales": [
+            "Viking Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION",
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "UBER": {
+          "score": 2.6,
+          "company": "Uber Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "Pershing Square"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "META": {
+          "score": 5.9,
+          "company": "Meta Platforms Inc",
+          "whale_count": 2,
+          "whales": [
+            "Pershing Square",
+            "Tiger Global"
+          ],
+          "signals": [
+            "NEW_ENTRY",
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "BRK-B": {
+          "score": 2.2,
+          "company": "Berkshire Hathaway Inc Del",
+          "whale_count": 1,
+          "whales": [
+            "Appaloosa Management"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "MSFT": {
+          "score": 6.2,
+          "company": "Microsoft Corp",
+          "whale_count": 3,
+          "whales": [
+            "Third Point",
+            "Tiger Global",
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "STRONG BUY"
+        },
+        "CTRA": {
+          "score": 3.5999999999999996,
+          "company": "Coterra Energy Inc",
+          "whale_count": 1,
+          "whales": [
+            "Elliott Management"
+          ],
+          "signals": [
+            "NEW_ENTRY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PLTR": {
+          "score": 1.8,
+          "company": "Palantir Technologies Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "HIGH_CONCENTRATION"
+          ],
+          "recommendation": "HOLD"
+        },
+        "AMD": {
+          "score": 3.6,
+          "company": "Advanced Micro Devices Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "HD": {
+          "score": 3.6,
+          "company": "Home Depot Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MCD": {
+          "score": 3.6,
+          "company": "Mcdonalds Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "LMT": {
+          "score": 3.6,
+          "company": "Lockheed Martin Corp",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "MMM": {
+          "score": 3.6,
+          "company": "3M Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "PEP": {
+          "score": 3.6,
+          "company": "Pepsico Inc",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "DE": {
+          "score": 3.6,
+          "company": "Deere & Co",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        },
+        "COP": {
+          "score": 3.6,
+          "company": "Conocophillips",
+          "whale_count": 1,
+          "whales": [
+            "D.E. Shaw"
+          ],
+          "signals": [
+            "AGGRESSIVE_BUY"
+          ],
+          "recommendation": "BUY"
+        }
+      }
+    }
+  ]
+}
