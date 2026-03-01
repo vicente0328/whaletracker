@@ -1362,6 +1362,8 @@ def build_portfolio_tab(auth_data=None):
 
 def _build_portfolio_analysis(port_data: dict):
     """Portfolio charts and rebalancing analysis built from the given portfolio dict."""
+    from src.market_data import fetch_live_prices as _flp  # noqa: PLC0415
+
     holdings_list  = port_data.get("holdings", [])
     target_weights = port_data.get("target_sector_weights", {})
     curr_weights   = get_current_sector_weights(port_data)
@@ -1370,10 +1372,24 @@ def _build_portfolio_analysis(port_data: dict):
     reb            = suggest_rebalancing(port_data, rotation)  # rotation is a startup global
     top_sector     = max(curr_weights, key=curr_weights.get) if curr_weights else "—"
 
+    # Fetch live prices for all holdings upfront (cached 15 min)
+    live_px  = _flp([h["ticker"] for h in holdings_list])
+    pv_live  = sum(
+        h.get("quantity", 0) * live_px.get(h["ticker"], h.get("avg_cost", 0))
+        for h in holdings_list
+    )
+    total_pnl = pv_live - pv
+
     # Mini KPIs
+    pnl_sign  = "+" if total_pnl >= 0 else ""
+    pnl_color = C["green"] if total_pnl >= 0 else C["red"]
     mini_kpis = html.Div([
-        kpi_card("TOTAL VALUE",      f"${pv:,.0f}",
-                 f"{len(holdings_list)} positions",                          C["blue"]),
+        kpi_card("PORTFOLIO VALUE",  f"${pv_live:,.0f}",
+                 f"{len(holdings_list)} positions · 현재가 기준",            C["blue"]),
+        kpi_card("TOTAL P&L",
+                 html.Span(f"{pnl_sign}${total_pnl:,.0f}",
+                           style={"color": f"#{pnl_color}"}),
+                 f"매수 기준 ${pv:,.0f} vs 현재",                           pnl_color),
         kpi_card("SECTORS",          str(len(curr_weights)),
                  "GICS sectors covered",                                     C["purple"]),
         kpi_card("DOMINANT SECTOR",  top_sector,
@@ -1457,37 +1473,67 @@ def _build_portfolio_analysis(port_data: dict):
             rows.append(html.Div(cards, className="grid-3"))
         reb_content = html.Div(rows)
 
-    # Raw holdings table
+    # Raw holdings table — with live prices and P&L (live_px fetched above)
     th = lambda txt, right=False: html.Th(txt, className="tbl-th",
                                            style={"textAlign": "right" if right else "left"})
-    def td(txt, right=False, green=False, bold=False):
+    def td(txt, right=False, color=None, bold=False):
         return html.Td(txt, style={
             "padding": "7px 10px", "fontSize": "0.82rem",
             "textAlign": "right" if right else "left",
             "fontWeight": "700" if bold else "400",
-            "color": f"#{C['green']}" if green else (f"#{C['text']}" if bold else f"#{C['muted']}"),
+            "color": color or (f"#{C['text']}" if bold else f"#{C['muted']}"),
         })
 
+    holding_rows = []
+    for h in holdings_list:
+        qty      = h.get("quantity", 0)
+        avg_cost = h.get("avg_cost", 0)
+        live_p   = live_px.get(h["ticker"])
+        cost_val = qty * avg_cost
+        mkt_val  = qty * live_p if live_p else None
+        pnl      = (mkt_val - cost_val) if mkt_val is not None else None
+        pnl_pct  = (pnl / cost_val * 100) if (pnl is not None and cost_val) else None
+
+        if live_p:
+            price_td = td(f"${live_p:,.2f}", right=True, color=f"#{C['text']}")
+        else:
+            price_td = td("—", right=True)
+
+        if mkt_val is not None:
+            mv_td = td(f"${mkt_val:,.0f}", right=True, color=f"#{C['green']}", bold=True)
+        else:
+            mv_td = td(f"${cost_val:,.0f}", right=True, color=f"#{C['green']}", bold=True)
+
+        if pnl is not None:
+            sign  = "+" if pnl >= 0 else ""
+            color = f"#{C['green']}" if pnl >= 0 else f"#{C['red']}"
+            pnl_td = td(f"{sign}${pnl:,.0f} ({sign}{pnl_pct:.1f}%)",
+                        right=True, color=color, bold=True)
+        else:
+            pnl_td = td("—", right=True)
+
+        holding_rows.append(html.Tr([
+            td(h["ticker"], bold=True),
+            td(h.get("sector", "—")),
+            td(f"{qty:,}", right=True),
+            td(f"${avg_cost:,.2f}", right=True),
+            price_td,
+            mv_td,
+            pnl_td,
+        ], style={"borderBottom": f"1px solid #{C['border']}40"}))
+
     raw_holdings = html.Details([
-        html.Summary("📋  Raw Holdings", className="expander-summary"),
+        html.Summary("📋  Holdings  ·  현재가 & 평가손익", className="expander-summary"),
         html.Div(
             html.Table([
                 html.Thead(html.Tr([
                     th("Ticker"), th("Sector"),
                     th("Qty", right=True), th("Avg Cost", right=True),
-                    th("Market Value", right=True),
+                    th("Current Price", right=True),
+                    th("Mkt Value", right=True),
+                    th("P&L", right=True),
                 ])),
-                html.Tbody([
-                    html.Tr([
-                        td(h["ticker"],                            bold=True),
-                        td(h.get("sector", "—")),
-                        td(f"{h.get('quantity',0):,}",             right=True),
-                        td(f"${h.get('avg_cost',0):,.2f}",         right=True),
-                        td(f"${h.get('quantity',0)*h.get('avg_cost',0):,.0f}",
-                           right=True, green=True, bold=True),
-                    ], style={"borderBottom": f"1px solid #{C['border']}40"})
-                    for h in holdings_list
-                ]),
+                html.Tbody(holding_rows),
             ], className="raw-table"),
             className="raw-table-wrapper",
         ),
