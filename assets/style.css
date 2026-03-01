@@ -1,42 +1,59 @@
 /* ── WhaleTracker AI — Dark Fintech Theme ───────────────────────────────── */
 
-/* ── Ticker autocomplete dropdown (dark theme) ── */
-#h-ticker .Select-control,
-#h-ticker .VirtualizedSelectFocusedOption,
-#h-ticker.is-focused:not(.is-open) > .Select-control {
-    background: #1C2333 !important;
-    border: 1px solid #2E3952 !important;
+/* ── All dcc.Dropdown — global dark theme ── */
+.Select-control,
+.is-focused:not(.is-open) > .Select-control {
+    background: #1E2130 !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
     border-radius: 6px !important;
     color: #E8ECF0 !important;
-    min-height: 30px !important;
-    height: 30px !important;
     box-shadow: none !important;
 }
-#h-ticker .Select-value-label,
-#h-ticker .Select-placeholder {
-    color: #9BA3B8 !important;
-    font-size: 0.78rem !important;
-    line-height: 28px !important;
-}
-#h-ticker .Select-value-label { color: #E8ECF0 !important; }
-#h-ticker .Select-arrow-zone .Select-arrow { border-top-color: #9BA3B8 !important; }
-#h-ticker .Select-input > input { color: #E8ECF0 !important; font-size: 0.78rem !important; }
-#h-ticker .Select-menu-outer {
-    background: #1C2333 !important;
-    border: 1px solid #2E3952 !important;
-    border-radius: 6px !important;
+.Select-control:hover { border-color: rgba(75,123,229,0.45) !important; }
+
+.Select-value-label  { color: #E8ECF0 !important; }
+.Select-placeholder  { color: #8892A4 !important; }
+.Select-input > input { color: #E8ECF0 !important; background: transparent !important; }
+.Select-arrow-zone .Select-arrow { border-top-color: #8892A4 !important; }
+.Select-clear-zone   { color: #8892A4 !important; }
+.Select-clear-zone:hover { color: #FF4757 !important; }
+
+.Select-menu-outer {
+    background: #1E2130 !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 0 0 8px 8px !important;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.55) !important;
     z-index: 9999 !important;
 }
-#h-ticker .Select-option {
-    background: #1C2333 !important;
+.Select-menu { background: #1E2130 !important; }
+.VirtualizedSelectFocusedOption,
+.Select-option {
+    background: #1E2130 !important;
+    color: #C8CDD8 !important;
+}
+.Select-option.is-focused,
+.Select-option:hover,
+.VirtualizedSelectFocusedOption {
+    background: #2A3452 !important;
     color: #E8ECF0 !important;
-    font-size: 0.78rem !important;
 }
-#h-ticker .Select-option.is-focused,
-#h-ticker .Select-option:hover {
-    background: #2E3952 !important;
+.Select-option.is-selected {
+    background: rgba(75,123,229,0.18) !important;
+    color: #7BA4F0 !important;
+    font-weight: 600 !important;
 }
-#h-ticker .Select-clear-zone { color: #9BA3B8 !important; }
+.Select-option.is-disabled { color: #4A5568 !important; }
+
+/* ── #h-ticker overrides (compact height) ── */
+#h-ticker .Select-control,
+#h-ticker.is-focused:not(.is-open) > .Select-control {
+    min-height: 30px !important;
+    height: 30px !important;
+}
+#h-ticker .Select-value-label,
+#h-ticker .Select-placeholder { font-size: 0.78rem !important; line-height: 28px !important; }
+#h-ticker .Select-input > input { font-size: 0.78rem !important; }
+#h-ticker .Select-option { font-size: 0.78rem !important; }
 
 *, *::before, *::after { box-sizing: border-box; }
 

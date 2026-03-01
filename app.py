@@ -88,8 +88,9 @@ def _write_news_sub(settings: dict) -> None:
     try:
         with open(_NEWS_SUB_FILE, "w") as _f:
             json.dump(settings, _f)
-    except Exception:
-        pass
+        logger.debug("News sub settings written: %s", settings)
+    except Exception as exc:
+        logger.warning("Failed to write news sub settings: %s", exc)
 
 # ── DATA (loaded once at startup) ──────────────────────────────────────────────
 filings          = fetch_all_whale_filings()
@@ -1320,10 +1321,7 @@ def build_portfolio_tab(auth_data=None):
                 }),
                 dcc.Dropdown(id="h-sector", options=[{"label": s, "value": s} for s in _SECTORS],
                              placeholder="Sector", clearable=False,
-                             style={
-                                 "width": "190px", "fontSize": "0.78rem",
-                                 "background": f"#{C['card2']}", "color": "#000",
-                             }),
+                             style={"width": "190px", "fontSize": "0.78rem"}),
                 html.Button("＋ Add / Update", id="holding-add-btn", n_clicks=0, style={
                     "background": f"#{C['green']}22", "color": f"#{C['green']}",
                     "border": f"1px solid #{C['green']}44", "borderRadius": "6px",
@@ -2755,10 +2753,7 @@ app.layout = html.Div([
                                       "value": h} for h in range(24)],
                             value=8,   # default 08:00 KST
                             clearable=False,
-                            style={
-                                "fontSize": "0.78rem", "width": "220px",
-                                "background": f"#{C['card2']}",
-                            },
+                            style={"fontSize": "0.78rem", "width": "220px"},
                         ),
                         html.Div(id="news-time-preview", style={
                             "fontSize": "0.7rem", "color": f"#{C['amber']}",
@@ -3045,9 +3040,14 @@ def load_news_banner(n_intervals):
     Input("daily-news-sub-store", "data"),
 )
 def update_daily_news_toggle(settings):
-    """Reflect current subscription state and sync settings panel inputs."""
+    """Reflect current subscription state and sync settings panel inputs.
+    Also syncs browser localStorage → server file so the scheduler always
+    has up-to-date settings even after a redeploy.
+    """
     if not isinstance(settings, dict):
         settings = _NEWS_SUB_DEFAULTS
+    # Sync to server file on every page load (browser store is source of truth)
+    _write_news_sub(settings)
     subscribed = settings.get("enabled", False)
     hour_utc   = settings.get("hour_utc", settings.get("hour", 23))  # backwards compat
     tz         = settings.get("timezone", "KST")
