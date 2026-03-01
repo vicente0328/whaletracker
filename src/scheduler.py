@@ -307,9 +307,10 @@ def _daily_news_job() -> None:
         logger.info("[scheduler] Daily news subscription disabled — skipping")
         return
 
-    # Check if current UTC hour matches the user's chosen delivery hour
+    # Check if current UTC hour matches the user's chosen delivery hour.
+    # Settings may store "hour_utc" (new) or legacy "hour" (old, assumed UTC).
     current_hour = datetime.now(timezone.utc).hour
-    target_hour  = int(settings.get("hour", DAILY_NEWS_HOUR))
+    target_hour  = int(settings.get("hour_utc", settings.get("hour", DAILY_NEWS_HOUR)))
     if current_hour != target_hour:
         logger.debug(
             "[scheduler] Daily news: current hour %d ≠ target %d — skipping",

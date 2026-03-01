@@ -48,7 +48,28 @@ _NEWS_TOPIC_OPTIONS = [
 ]
 _ALL_TOPIC_IDS = [t["id"] for t in _NEWS_TOPIC_OPTIONS]
 
-_NEWS_SUB_DEFAULTS = {"enabled": False, "hour": 8, "topics": _ALL_TOPIC_IDS}
+_NEWS_SUB_DEFAULTS = {
+    "enabled":  False,
+    "hour_utc": 23,          # UTC hour (08:00 KST default = 23:00 UTC prev day)
+    "timezone": "KST",       # display timezone preference ("KST" or "UTC")
+    "topics":   _ALL_TOPIC_IDS,
+}
+
+_TOPIC_COLORS = {
+    "market":       ("4B7BE5", "📈"),   # blue
+    "macro":        ("A78BFA", "🏛️"),   # purple
+    "earnings":     ("FFB800", "💰"),   # amber
+    "geopolitical": ("FF4757", "⚔️"),   # red
+    "crypto":       ("00D09C", "₿"),    # green
+}
+
+
+def _kst_to_utc(kst_h: int) -> int:
+    return (kst_h - 9) % 24
+
+
+def _utc_to_kst(utc_h: int) -> int:
+    return (utc_h + 9) % 24
 
 
 def _read_news_sub() -> dict:
@@ -2638,51 +2659,115 @@ app.layout = html.Div([
         # ── Settings panel (collapsed by default) ────────────────────────
         html.Div(id="daily-news-settings-panel", style={"display": "none"}, children=[
             html.Div([
-                # Delivery time selector
-                html.Div([
-                    html.Label("⏰ 알림 시간 (UTC)",
-                               style={"fontSize": "0.7rem", "color": f"#{C['muted']}",
-                                      "marginBottom": "4px", "display": "block"}),
-                    dcc.Dropdown(
-                        id="daily-news-hour-picker",
-                        options=[{"label": f"{h:02d}:00 UTC", "value": h} for h in range(24)],
-                        value=8,
-                        clearable=False,
-                        style={"fontSize": "0.75rem", "width": "140px",
-                               "background": f"#{C['card']}", "color": f"#{C['text']}"},
-                    ),
-                ], style={"marginBottom": "10px"}),
 
-                # Topic checkboxes
+                # Panel header
                 html.Div([
-                    html.Label("📌 알림 토픽 선택",
-                               style={"fontSize": "0.7rem", "color": f"#{C['muted']}",
-                                      "marginBottom": "6px", "display": "block"}),
+                    html.Span("📬", style={"marginRight": "6px", "fontSize": "0.9rem"}),
+                    html.Span("Daily News 알림 설정",
+                              style={"fontWeight": "700", "fontSize": "0.82rem",
+                                     "color": f"#{C['text']}"}),
+                    html.Span(id="news-settings-saved-badge",
+                              style={"marginLeft": "auto", "fontSize": "0.65rem",
+                                     "color": f"#{C['green']}", "opacity": "0"}),
+                ], style={
+                    "display": "flex", "alignItems": "center",
+                    "marginBottom": "14px",
+                    "paddingBottom": "10px",
+                    "borderBottom": f"1px solid #{C['blue']}33",
+                }),
+
+                # ── Time section ──────────────────────────────────────────
+                html.Div([
+                    html.Div("⏰ 알림 시간",
+                             style={"fontSize": "0.72rem", "fontWeight": "600",
+                                    "color": f"#{C['text']}", "marginBottom": "8px"}),
+
+                    html.Div([
+                        # Timezone toggle
+                        dcc.RadioItems(
+                            id="daily-news-tz-radio",
+                            options=[
+                                {"label": "🇰🇷 KST (Seoul)", "value": "KST"},
+                                {"label": "🌐 UTC",           "value": "UTC"},
+                            ],
+                            value="KST",
+                            inline=True,
+                            inputStyle={"marginRight": "4px", "accentColor": f"#{C['blue']}"},
+                            labelStyle={
+                                "marginRight": "14px", "fontSize": "0.75rem",
+                                "color": f"#{C['text']}", "cursor": "pointer",
+                                "fontWeight": "500",
+                            },
+                        ),
+                    ], style={"marginBottom": "8px"}),
+
+                    html.Div([
+                        dcc.Dropdown(
+                            id="daily-news-hour-picker",
+                            options=[{"label": f"{h:02d}:00 KST  →  {_kst_to_utc(h):02d}:00 UTC",
+                                      "value": h} for h in range(24)],
+                            value=8,   # default 08:00 KST
+                            clearable=False,
+                            style={
+                                "fontSize": "0.78rem", "width": "220px",
+                                "background": f"#{C['card2']}",
+                            },
+                        ),
+                        html.Div(id="news-time-preview", style={
+                            "fontSize": "0.7rem", "color": f"#{C['amber']}",
+                            "fontWeight": "600", "marginLeft": "10px",
+                            "alignSelf": "center",
+                        }),
+                    ], style={"display": "flex", "alignItems": "center"}),
+                ], style={
+                    "background": f"#{C['card2']}", "borderRadius": "6px",
+                    "padding": "10px 12px", "marginBottom": "10px",
+                    "border": f"1px solid #{C['blue']}22",
+                }),
+
+                # ── Topics section ─────────────────────────────────────────
+                html.Div([
+                    html.Div("📌 알림 토픽",
+                             style={"fontSize": "0.72rem", "fontWeight": "600",
+                                    "color": f"#{C['text']}", "marginBottom": "8px"}),
                     dcc.Checklist(
                         id="daily-news-topics-checklist",
                         options=[
-                            {"label": html.Span([
-                                html.Span(t["label"], style={"fontWeight": "600"}),
-                                html.Span(f" — {t['desc']}",
-                                          style={"color": f"#{C['muted']}", "fontSize": "0.68rem"}),
-                            ]), "value": t["id"]}
+                            {"label": html.Div([
+                                html.Span(_TOPIC_COLORS[t["id"]][1],
+                                          style={"marginRight": "5px", "fontSize": "0.85rem"}),
+                                html.Span(t["label"].split(" ", 1)[1],
+                                          style={"fontWeight": "700", "fontSize": "0.77rem",
+                                                 "color": f"#{_TOPIC_COLORS[t['id']][0]}"}),
+                                html.Span(f"  {t['desc']}",
+                                          style={"fontSize": "0.68rem",
+                                                 "color": f"#{C['muted']}",
+                                                 "marginLeft": "4px"}),
+                            ], style={"display": "flex", "alignItems": "center"}),
+                             "value": t["id"]}
                             for t in _NEWS_TOPIC_OPTIONS
                         ],
                         value=_ALL_TOPIC_IDS,
-                        inputStyle={"marginRight": "6px", "accentColor": f"#{C['blue']}"},
-                        labelStyle={"display": "flex", "alignItems": "center",
-                                    "marginBottom": "5px", "fontSize": "0.75rem",
-                                    "cursor": "pointer"},
+                        inputStyle={"marginRight": "8px", "accentColor": f"#{C['blue']}",
+                                    "width": "14px", "height": "14px"},
+                        labelStyle={
+                            "display": "flex", "alignItems": "center",
+                            "padding": "5px 8px", "borderRadius": "5px",
+                            "marginBottom": "3px", "cursor": "pointer",
+                            "transition": "background 0.15s",
+                        },
                     ),
-                ]),
+                ], style={
+                    "background": f"#{C['card2']}", "borderRadius": "6px",
+                    "padding": "10px 12px",
+                    "border": f"1px solid #{C['purple']}22",
+                }),
 
-                html.Div("설정은 자동 저장됩니다",
-                         style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
-                                "marginTop": "8px", "textAlign": "right"}),
             ], style={
-                "background": f"#{C['card']}", "border": f"1px solid #{C['border']}",
-                "borderRadius": "8px", "padding": "12px 14px",
-                "marginBottom": "6px",
+                "background": f"#{C['card']}", "borderRadius": "10px",
+                "padding": "14px 16px", "marginBottom": "6px",
+                "border": f"1px solid #{C['blue']}44",
+                "boxShadow": f"0 0 0 1px #{C['blue']}18",
             }),
         ]),
 
@@ -2909,6 +2994,7 @@ def load_news_banner(n_intervals):
     Output("daily-news-toggle",           "style"),
     Output("daily-news-hour-picker",      "value"),
     Output("daily-news-topics-checklist", "value"),
+    Output("daily-news-tz-radio",         "value"),
     Input("daily-news-sub-store", "data"),
 )
 def update_daily_news_toggle(settings):
@@ -2916,8 +3002,12 @@ def update_daily_news_toggle(settings):
     if not isinstance(settings, dict):
         settings = _NEWS_SUB_DEFAULTS
     subscribed = settings.get("enabled", False)
-    hour       = settings.get("hour", 8)
+    hour_utc   = settings.get("hour_utc", settings.get("hour", 23))  # backwards compat
+    tz         = settings.get("timezone", "KST")
     topics     = settings.get("topics") or _ALL_TOPIC_IDS
+
+    # Display hour in the selected timezone
+    display_hour = _utc_to_kst(hour_utc) if tz == "KST" else hour_utc
 
     _base = {
         "fontSize": "0.65rem", "fontWeight": "700",
@@ -2936,7 +3026,32 @@ def update_daily_news_toggle(settings):
                      "background": f"#{C['card2']}",
                      "color": f"#{C['muted']}",
                      "border": f"1px solid #{C['border']}"}
-    return btn_label, btn_style, hour, topics
+    return btn_label, btn_style, display_hour, topics, tz
+
+
+@app.callback(
+    Output("daily-news-hour-picker", "options"),
+    Output("news-time-preview",      "children"),
+    Input("daily-news-tz-radio",     "value"),
+    Input("daily-news-hour-picker",  "value"),
+)
+def update_hour_options(tz, display_hour):
+    """Rebuild hour picker options and live preview when timezone or hour changes."""
+    h = display_hour or 8
+    if tz == "KST":
+        options = [
+            {"label": f"{hh:02d}:00 KST  →  {_kst_to_utc(hh):02d}:00 UTC", "value": hh}
+            for hh in range(24)
+        ]
+        utc_h   = _kst_to_utc(h)
+        preview = f"서버 기준 {utc_h:02d}:10 UTC 발송"
+    else:
+        options = [
+            {"label": f"{hh:02d}:00 UTC  →  {_utc_to_kst(hh):02d}:00 KST", "value": hh}
+            for hh in range(24)
+        ]
+        preview = f"한국 시간 {_utc_to_kst(h):02d}:10 KST 발송"
+    return options, preview
 
 
 @app.callback(
@@ -2944,10 +3059,11 @@ def update_daily_news_toggle(settings):
     Input("daily-news-toggle",           "n_clicks"),
     Input("daily-news-hour-picker",      "value"),
     Input("daily-news-topics-checklist", "value"),
+    Input("daily-news-tz-radio",         "value"),
     State("daily-news-sub-store",        "data"),
     prevent_initial_call=True,
 )
-def update_news_sub_settings(toggle_clicks, hour, topics, current):
+def update_news_sub_settings(toggle_clicks, display_hour, topics, tz, current):
     """Handle toggle click and settings changes; persist to disk."""
     if not isinstance(current, dict):
         current = dict(_NEWS_SUB_DEFAULTS)
@@ -2955,14 +3071,21 @@ def update_news_sub_settings(toggle_clicks, hour, topics, current):
     triggered = ctx.triggered_id
 
     if triggered == "daily-news-toggle":
-        new_enabled = not bool(current.get("enabled", False))
+        new_enabled  = not bool(current.get("enabled", False))
         new_settings = {**current, "enabled": new_enabled}
     else:
-        # Hour or topic change — keep enabled state as-is
+        tz = tz or current.get("timezone", "KST")
+        h  = display_hour if display_hour is not None else (
+            _utc_to_kst(current.get("hour_utc", 23)) if tz == "KST"
+            else current.get("hour_utc", 23)
+        )
+        # Always store UTC hour
+        hour_utc = _kst_to_utc(h) if tz == "KST" else h
         new_settings = {
             **current,
-            "hour":   hour   if hour   is not None else current.get("hour", 8),
-            "topics": topics if topics is not None else current.get("topics", _ALL_TOPIC_IDS),
+            "timezone": tz,
+            "hour_utc": hour_utc,
+            "topics":   topics if topics is not None else current.get("topics", _ALL_TOPIC_IDS),
         }
 
     _write_news_sub(new_settings)
