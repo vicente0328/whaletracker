@@ -283,10 +283,23 @@ def _realtime_form4_job() -> None:
 
 
 def _read_news_settings() -> dict:
-    """Return the full daily-news settings dict from daily_news_sub.json."""
+    """Return the full daily-news settings dict.
+
+    Prefers the shared in-memory state (updated from browser localStorage on
+    every page load) over direct file reads so Railway redeploys don't silently
+    disable alerts.  Falls back to the JSON file then defaults.
+    """
+    try:
+        from src.news_settings import get as _ns_get  # noqa: PLC0415
+        settings = _ns_get()
+        if settings:
+            return settings
+    except Exception as exc:
+        logger.debug("[scheduler] news_settings import failed: %s", exc)
+
+    # File fallback (may not exist after a Railway redeploy)
     import json  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
-
     sub_file = Path(__file__).parent.parent / "daily_news_sub.json"
     defaults = {"enabled": False, "hour": DAILY_NEWS_HOUR, "topics": []}
     try:

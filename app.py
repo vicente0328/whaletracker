@@ -34,6 +34,7 @@ from src.news_collector import fetch_market_news
 import src.firebase_manager as fb
 from src.ticker_list import TICKER_OPTIONS
 from src.news_collector import search_ticker_news
+import src.news_settings as _news_settings
 
 load_dotenv()
 DATA_MODE        = os.getenv("DATA_MODE", "mock")
@@ -86,14 +87,14 @@ def _read_news_sub() -> dict:
     return dict(_NEWS_SUB_DEFAULTS)
 
 
-def _write_news_sub(settings: dict) -> None:
-    """Persist the full news subscription settings so the scheduler can read it."""
-    try:
-        with open(_NEWS_SUB_FILE, "w") as _f:
-            json.dump(settings, _f)
-        logger.debug("News sub settings written: %s", settings)
-    except Exception as exc:
-        logger.warning("Failed to write news sub settings: %s", exc)
+def _write_news_sub(settings: dict, *, skip_if_disabled_override: bool = False) -> None:
+    """Update shared in-memory settings and persist to disk.
+
+    Uses src.news_settings as the authoritative store so the APScheduler
+    thread always reads up-to-date values even after a Railway redeploy
+    wipes the filesystem.
+    """
+    _news_settings.put(settings, skip_if_disabled_override=skip_if_disabled_override)
 
 # ── DATA (loaded once at startup) ──────────────────────────────────────────────
 filings          = fetch_all_whale_filings()
@@ -3388,10 +3389,13 @@ def update_daily_news_toggle(settings):
     Also syncs browser localStorage → server file so the scheduler always
     has up-to-date settings even after a redeploy.
     """
-    if not isinstance(settings, dict):
+    is_default_fallback = not isinstance(settings, dict)
+    if is_default_fallback:
         settings = _NEWS_SUB_DEFAULTS
-    # Sync to server file on every page load (browser store is source of truth)
-    _write_news_sub(settings)
+    # Sync to shared state on every page load.
+    # Use skip_if_disabled_override on the initial server render (before localStorage
+    # loads) so we never accidentally stomp an already-enabled subscription with defaults.
+    _write_news_sub(settings, skip_if_disabled_override=is_default_fallback)
     subscribed = settings.get("enabled", False)
     hour_utc   = settings.get("hour_utc", settings.get("hour", 23))  # backwards compat
     tz         = settings.get("timezone", "KST")
