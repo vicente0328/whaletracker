@@ -3166,13 +3166,19 @@ def update_portfolio_analysis(store_data, tab):
     Input("portfolio-edit-store", "data"),
 )
 def render_editor_holdings(store_data):
-    """Render the editable holdings table from the portfolio-edit-store."""
+    """Render the editable holdings table with live prices and P&L."""
+    from src.market_data import fetch_live_prices  # noqa: PLC0415
+
     holdings = (store_data or {}).get("holdings", [])
 
     if not holdings:
         return html.Div("No holdings yet. Add some above.",
                         style={"color": f"#{C['muted']}", "fontSize": "0.8rem",
                                "padding": "0.5rem 0"})
+
+    # Batch-fetch live prices for all holdings
+    tickers      = [h["ticker"] for h in holdings]
+    live_prices  = fetch_live_prices(tickers)
 
     th_s = {"padding": "6px 10px", "fontSize": "0.72rem", "fontWeight": "700",
              "color": f"#{C['muted']}", "textAlign": "left",
@@ -3182,14 +3188,46 @@ def render_editor_holdings(store_data):
 
     rows = []
     for i, h in enumerate(holdings):
-        val = h.get("quantity", 0) * h.get("avg_cost", 0)
+        qty       = h.get("quantity", 0)
+        avg_cost  = h.get("avg_cost", 0)
+        live_p    = live_prices.get(h["ticker"])
+
+        cost_basis = qty * avg_cost
+        mkt_value  = qty * live_p if live_p else None
+        pnl        = (mkt_value - cost_basis) if mkt_value is not None else None
+        pnl_pct    = (pnl / cost_basis * 100) if (pnl is not None and cost_basis) else None
+
+        # Current price cell
+        if live_p:
+            price_cell = html.Td(f"${live_p:,.2f}", style=td_r)
+        else:
+            price_cell = html.Td("—", style={**td_r, "color": f"#{C['muted']}"})
+
+        # Market value cell
+        if mkt_value is not None:
+            mv_cell = html.Td(f"${mkt_value:,.0f}", style={**td_r, "fontWeight": "700"})
+        else:
+            mv_cell = html.Td(f"${cost_basis:,.0f}", style={**td_r, "fontWeight": "700",
+                                                             "color": f"#{C['muted']}"})
+
+        # P&L cell
+        if pnl is not None:
+            pnl_color  = C["green"] if pnl >= 0 else C["red"]
+            pnl_sign   = "+" if pnl >= 0 else ""
+            pnl_label  = f"{pnl_sign}${pnl:,.0f} ({pnl_sign}{pnl_pct:.1f}%)"
+            pnl_cell   = html.Td(pnl_label, style={**td_r, "color": f"#{pnl_color}",
+                                                    "fontWeight": "700", "fontSize": "0.78rem"})
+        else:
+            pnl_cell = html.Td("—", style={**td_r, "color": f"#{C['muted']}"})
+
         rows.append(html.Tr([
-            html.Td(h["ticker"],                          style={**td_s, "fontWeight": "700"}),
-            html.Td(h.get("sector", "—"),                 style=td_s),
-            html.Td(f"{h.get('quantity', 0):,}",          style=td_r),
-            html.Td(f"${h.get('avg_cost', 0):,.2f}",      style=td_r),
-            html.Td(f"${val:,.0f}",                        style={**td_r, "color": f"#{C['green']}",
-                                                                   "fontWeight": "700"}),
+            html.Td(h["ticker"],                     style={**td_s, "fontWeight": "700"}),
+            html.Td(h.get("sector", "—"),            style=td_s),
+            html.Td(f"{qty:,}",                      style=td_r),
+            html.Td(f"${avg_cost:,.2f}",             style=td_r),
+            price_cell,
+            mv_cell,
+            pnl_cell,
             html.Td(
                 html.Button("✕", id={"type": "holding-del-btn", "index": i}, n_clicks=0,
                             style={
@@ -3203,15 +3241,31 @@ def render_editor_holdings(store_data):
 
     return html.Table([
         html.Thead(html.Tr([
-            html.Th("Ticker",       style=th_s),
-            html.Th("Sector",       style=th_s),
-            html.Th("Qty",          style={**th_s, "textAlign": "right"}),
-            html.Th("Avg Cost",     style={**th_s, "textAlign": "right"}),
-            html.Th("Market Value", style={**th_s, "textAlign": "right"}),
-            html.Th("",             style=th_s),
+            html.Th("Ticker",        style=th_s),
+            html.Th("Sector",        style=th_s),
+            html.Th("Qty",           style={**th_s, "textAlign": "right"}),
+            html.Th("Avg Cost",      style={**th_s, "textAlign": "right"}),
+            html.Th("Current Price", style={**th_s, "textAlign": "right"}),
+            html.Th("Mkt Value",     style={**th_s, "textAlign": "right"}),
+            html.Th("P&L",           style={**th_s, "textAlign": "right"}),
+            html.Th("",              style=th_s),
         ])),
         html.Tbody(rows),
     ], className="raw-table")
+
+
+@app.callback(
+    Output("h-sector", "value", allow_duplicate=True),
+    Input("h-ticker",  "value"),
+    prevent_initial_call=True,
+)
+def autofill_sector(ticker: str | None):
+    """When a ticker is selected in the dropdown, auto-populate the sector field."""
+    from src.market_data import fetch_sector as _fetch_sector  # noqa: PLC0415
+    if not ticker:
+        return no_update
+    sector = _fetch_sector(ticker.strip().upper())
+    return sector if sector else no_update
 
 
 @app.callback(
@@ -3228,6 +3282,8 @@ def render_editor_holdings(store_data):
     prevent_initial_call=True,
 )
 def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
+    from src.market_data import fetch_sector as _fetch_sector  # noqa: PLC0415
+
     if not n_clicks:
         return no_update, no_update, no_update, no_update
 
@@ -3244,7 +3300,10 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
     if qty_f <= 0 or cost_f <= 0:
         return no_update, no_update, no_update, no_update
 
-    current = dict(store_data or {})
+    # Auto-detect sector if not provided by user
+    resolved_sector = sector or _fetch_sector(ticker) or "Other"
+
+    current  = dict(store_data or {})
     holdings = list(current.get("holdings", []))
 
     # Update if ticker already exists
@@ -3252,8 +3311,7 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
         if h["ticker"] == ticker:
             h["quantity"] = qty_f
             h["avg_cost"]  = cost_f
-            if sector:
-                h["sector"] = sector
+            h["sector"]    = resolved_sector
             current["holdings"] = holdings
             return current, None, None, None
 
@@ -3261,7 +3319,7 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
         "ticker":   ticker,
         "quantity": qty_f,
         "avg_cost":  cost_f,
-        "sector":   sector or "Other",
+        "sector":   resolved_sector,
     })
     current["holdings"] = holdings
     return current, None, None, None

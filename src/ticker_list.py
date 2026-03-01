@@ -375,6 +375,7 @@ _TICKERS: list[tuple[str, str]] = [
 
     # ── Popular ETFs ───────────────────────────────────────────────────────────
     ("SPY",   "SPDR S&P 500 ETF Trust"),
+    ("IVV",   "iShares Core S&P 500 ETF"),
     ("QQQ",   "Invesco QQQ Trust (NASDAQ-100)"),
     ("IWM",   "iShares Russell 2000 ETF"),
     ("DIA",   "SPDR Dow Jones Industrial ETF"),
