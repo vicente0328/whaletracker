@@ -51,6 +51,58 @@ _RSS_FEEDS = [
 # Public API
 # ---------------------------------------------------------------------------
 
+def search_ticker_news(ticker: str, n: int = 5) -> list[dict[str, Any]]:
+    """Return up to `n` recent headlines mentioning `ticker` (case-insensitive).
+
+    Searches the cached general news first; falls back to a fresh NewsAPI
+    query if available.  Never raises.
+    """
+    ticker_upper = ticker.upper()
+
+    # 1. Check already-cached general headlines (free, instant)
+    cached = fetch_market_news(50)
+    matches = [
+        item for item in cached
+        if ticker_upper in item.get("headline", "").upper()
+    ]
+    if len(matches) >= n:
+        return matches[:n]
+
+    # 2. Targeted NewsAPI query if key is available
+    if _NEWS_API_KEY:
+        try:
+            resp = requests.get(
+                "https://newsapi.org/v2/everything",
+                params={
+                    "q":        ticker_upper,
+                    "language": "en",
+                    "pageSize": min(n, 10),
+                    "sortBy":   "publishedAt",
+                    "apiKey":   _NEWS_API_KEY,
+                },
+                timeout=8,
+            )
+            resp.raise_for_status()
+            articles = resp.json().get("articles", [])
+            items = []
+            for a in articles:
+                headline = a.get("title", "").split(" - ")[0].strip()
+                if not headline or headline.lower() == "[removed]":
+                    continue
+                items.append({
+                    "headline":    headline,
+                    "source":      a.get("source", {}).get("name", "NewsAPI"),
+                    "url":         a.get("url", ""),
+                    "published_at": _fmt_date(a.get("publishedAt", "")),
+                })
+            if items:
+                return items[:n]
+        except Exception as exc:
+            logger.debug("search_ticker_news(%s) NewsAPI failed: %s", ticker, exc)
+
+    return matches[:n]
+
+
 def fetch_market_news(n: int = 5) -> list[dict[str, Any]]:
     """Return up to `n` top financial news headlines.
 

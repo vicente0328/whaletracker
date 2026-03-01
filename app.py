@@ -30,6 +30,7 @@ from src.macro_collector import fetch_macro_indicators
 from src.news_collector import fetch_market_news
 import src.firebase_manager as fb
 from src.ticker_list import TICKER_OPTIONS
+from src.news_collector import search_ticker_news
 
 load_dotenv()
 DATA_MODE = os.getenv("DATA_MODE", "mock")
@@ -128,6 +129,257 @@ def plotly_base(**kwargs) -> dict:
     )
     base.update(kwargs)
     return base
+
+
+# ── SECTOR CONTEXT DATA ────────────────────────────────────────────────────────
+# Macro-condition rule: (fed_rate_threshold, is_above, label)
+_SECTOR_WHY: dict[str, dict] = {
+    "Technology":             {"drivers": ["AI / cloud capex supercycle", "Rate-sensitive: discount rate relief on cuts", "Buybacks & cash-flow generation"],
+                               "risks":   ["Rising yields compress long-duration valuations", "Antitrust / regulation risk"],
+                               "macro":   lambda r, c, y: "✅ Rate tailwind" if r < 4.0 else "⚠️ Rate headwind"},
+    "Financials":             {"drivers": ["Net interest margin expands with higher rates", "Loan growth & credit quality", "Yield curve steepening boosts NIM"],
+                               "risks":   ["Credit losses in economic downturn", "Flat/inverted curve squeezes margins"],
+                               "macro":   lambda r, c, y: "✅ NIM expansion" if y > r else "⚠️ Curve compressed"},
+    "Energy":                 {"drivers": ["OPEC+ supply policy & production cuts", "Geopolitical risk premium", "Energy transition infrastructure demand"],
+                               "risks":   ["Demand destruction in recession", "IEA demand forecast downgrades"],
+                               "macro":   lambda r, c, y: "✅ Inflation hedge" if c > 3.0 else "Neutral"},
+    "Health Care":            {"drivers": ["Aging demographics structural tailwind", "Drug pricing & M&A activity", "Biotech pipeline inflections"],
+                               "risks":   ["Drug pricing legislation", "Clinical trial failures"],
+                               "macro":   lambda r, c, y: "✅ Defensive play" if r > 4.5 else "Neutral"},
+    "Consumer Discretionary": {"drivers": ["Consumer confidence & real wage growth", "Housing cycle strength", "Retail sales momentum"],
+                               "risks":   ["High rates reduce big-ticket spending", "Credit card delinquencies rising"],
+                               "macro":   lambda r, c, y: "⚠️ Squeezed consumer" if r > 4.5 else "✅ Low-rate tailwind"},
+    "Consumer Staples":       {"drivers": ["Defensive safe-haven in downturns", "Pricing power vs. input cost inflation", "Dividend yield attracts rate-cut bets"],
+                               "risks":   ["Margin pressure if inflation sticky", "Losing market share to private labels"],
+                               "macro":   lambda r, c, y: "✅ Defensive rotation" if r > 5.0 else "Neutral"},
+    "Industrials":            {"drivers": ["Manufacturing PMI (ISM) expansion", "Infrastructure & reshoring capex", "Aerospace/defense orders"],
+                               "risks":   ["PMI contraction kills order flow", "Supply chain disruption"],
+                               "macro":   lambda r, c, y: "Neutral"},
+    "Materials":              {"drivers": ["China growth & commodity demand", "Critical minerals / EV battery supply", "Onshoring driving domestic demand"],
+                               "risks":   ["China slowdown crushes commodity prices", "Dollar strength headwind"],
+                               "macro":   lambda r, c, y: "⚠️ Dollar headwind" if r > 4.5 else "Neutral"},
+    "Utilities":              {"drivers": ["Rate-cut beneficiary (bond proxy)", "AI data-center power demand surge", "Clean energy investment cycle"],
+                               "risks":   ["Rising rates make dividends less attractive", "Regulatory & capex risk"],
+                               "macro":   lambda r, c, y: "✅ Rate-cut play" if r > 4.0 else "Neutral"},
+    "Real Estate":            {"drivers": ["Rate-sensitive: cuts reduce cap rates", "Industrial/data-center REIT demand", "Housing undersupply structural support"],
+                               "risks":   ["High rates destroy office valuations", "WFH secular headwind for office REITs"],
+                               "macro":   lambda r, c, y: "✅ Rate-cut play" if r > 4.0 else "Neutral"},
+    "Communication Services": {"drivers": ["Digital ad market cyclical recovery", "Streaming pricing power / bundling", "AI integration in search & social"],
+                               "risks":   ["Ad recession in economic downturns", "Regulatory / content moderation risk"],
+                               "macro":   lambda r, c, y: "Neutral"},
+}
+
+# ── ACTIVIST BATTLEFIELD PHASES ────────────────────────────────────────────────
+_ACTIVIST_PHASES = [
+    # (phase_num, icon, label, keywords)  — checked highest-to-lowest
+    (4, "🤝", "Resolution",  ["settlement", "board seat", "steps down", "reaches deal",
+                               "reached agreement", "truce", "concede", "concession"]),
+    (3, "🗳️", "Proxy Fight", ["proxy fight", "proxy contest", "nominate director",
+                               "board nomination", "shareholder vote", "contested election",
+                               "proxy battle", "dissident slate"]),
+    (2, "📢", "Open Letter", ["open letter", "letter to board", "demands", "calls for",
+                               "urges", "pushes for", "calls on ceo", "publicly pressures",
+                               "sent a letter"]),
+    (1, "🎯", "13D Filed",   []),   # default — 13D on record but no escalation detected
+]
+
+
+def _classify_activist_phase(ticker: str, news: list[dict]) -> int:
+    """Return the highest activist phase (1–4) detected in news headlines."""
+    combined = " ".join(item.get("headline", "").lower() for item in news)
+    for phase_num, _icon, _label, keywords in sorted(_ACTIVIST_PHASES, reverse=True):
+        if any(kw in combined for kw in keywords):
+            return phase_num
+    return 1
+
+
+def build_sector_context(rotation: dict) -> html.Div:
+    """'Why' panel — rule-based macro-driven explanation for top sector movers."""
+    if not rotation:
+        return html.Div()
+
+    try:
+        macro = fetch_macro_indicators()
+    except Exception:
+        macro = {}
+    fed = macro.get("fed_rate", {}).get("current", 4.0)
+    cpi = macro.get("cpi",      {}).get("current", 3.0)
+    y10 = macro.get("yield_10y",{}).get("current", 4.2)
+
+    sorted_sectors = sorted(rotation.items(), key=lambda x: x[1], reverse=True)
+    top_up   = [(s, v) for s, v in sorted_sectors if v > 0][:2]
+    top_down = [(s, v) for s, v in sorted_sectors if v < 0][:1]
+    featured = top_up + top_down
+    if not featured:
+        return html.Div()
+
+    cards = []
+    for sector, score in featured:
+        info = _SECTOR_WHY.get(sector, {})
+        if not info:
+            continue
+        is_positive = score >= 0
+        score_color = f"#{C['green']}" if is_positive else f"#{C['red']}"
+        macro_label = info["macro"](fed, cpi, y10)
+        macro_color = (f"#{C['green']}" if macro_label.startswith("✅")
+                       else f"#{C['red']}"  if macro_label.startswith("⚠️")
+                       else f"#{C['muted']}")
+        cards.append(html.Div([
+            # Header
+            html.Div([
+                html.Span(sector, style={"fontWeight": "700", "fontSize": "0.82rem",
+                                         "color": f"#{C['text']}"}),
+                html.Span(f"{'▲' if is_positive else '▼'} {abs(int(score))} pts",
+                          style={"color": score_color, "fontSize": "0.72rem",
+                                 "fontWeight": "700", "marginLeft": "8px"}),
+                html.Span(macro_label, style={"color": macro_color, "fontSize": "0.65rem",
+                                               "marginLeft": "auto", "fontStyle": "italic"}),
+            ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
+            # Drivers
+            html.Div([
+                html.Div("Why whales are " + ("buying ↑" if is_positive else "exiting ↓"),
+                         style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
+                                "fontWeight": "600", "textTransform": "uppercase",
+                                "letterSpacing": "0.4px", "marginBottom": "4px"}),
+                *[html.Div(f"• {d}", style={"fontSize": "0.71rem", "color": f"#{C['text']}",
+                                             "marginBottom": "2px"})
+                  for d in info["drivers"]],
+            ], style={"marginBottom": "6px"}),
+            # Risks
+            html.Div([
+                html.Div("Key risks",
+                         style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
+                                "fontWeight": "600", "textTransform": "uppercase",
+                                "letterSpacing": "0.4px", "marginBottom": "4px"}),
+                *[html.Div(f"⚡ {r}", style={"fontSize": "0.70rem",
+                                              "color": f"#{C['muted']}", "marginBottom": "2px"})
+                  for r in info["risks"]],
+            ]),
+        ], style={
+            "background":   f"#{C['card2']}",
+            "borderRadius": "10px",
+            "padding":      "12px 14px",
+            "border":       f"1px solid #{C['border']}",
+            "borderLeft":   f"3px solid {score_color}",
+            "flex":         "1",
+        }))
+
+    return html.Div([
+        html.Div("🔍  Sector Context — Why Whales Are Moving",
+                 style={"fontSize": "0.72rem", "fontWeight": "700",
+                        "color": f"#{C['blue']}", "letterSpacing": "0.5px",
+                        "textTransform": "uppercase", "marginBottom": "0.6rem"}),
+        html.Div(cards, style={"display": "flex", "gap": "0.8rem", "flexWrap": "wrap"}),
+    ], style={
+        "background": f"#{C['card']}", "borderRadius": "12px",
+        "padding": "14px 16px", "border": f"1px solid #{C['border']}",
+        "marginTop": "0.5rem", "marginBottom": "1.2rem",
+    })
+
+
+def build_activist_battlefield(activist_data: dict) -> html.Div:
+    """Timeline visualization for active 13D campaigns."""
+    # Only show 13D (activist intent), not passive 13G
+    campaigns = {
+        k: v for k, v in activist_data.items()
+        if v.get("form_type", "") in ("SC 13D", "13D")
+    }
+    if not campaigns:
+        return html.Div()
+
+    phase_defs = [p for p in _ACTIVIST_PHASES]   # ordered 1..4
+
+    rows = []
+    for ticker, filing in sorted(campaigns.items()):
+        news        = search_ticker_news(ticker, n=10)
+        phase_num   = _classify_activist_phase(ticker, news)
+        filer       = filing.get("filer", "Unknown")
+        pct         = filing.get("pct_outstanding", 0)
+
+        # Build phase bar
+        phase_steps = []
+        for p_num, p_icon, p_label, _ in sorted(_ACTIVIST_PHASES, key=lambda x: x[0]):
+            active  = p_num <= phase_num
+            current = p_num == phase_num
+            dot_color = (f"#{C['red']}"   if current
+                         else f"#{C['green']}" if active
+                         else f"#{C['border']}")
+            phase_steps.append(html.Div([
+                html.Div(p_icon if current else ("✓" if active else "○"),
+                         style={
+                             "width": "22px", "height": "22px",
+                             "borderRadius": "50%",
+                             "background": dot_color if active else "transparent",
+                             "border": f"2px solid {dot_color}",
+                             "display": "flex", "alignItems": "center",
+                             "justifyContent": "center",
+                             "fontSize": "0.7rem", "color": f"#{C['bg']}",
+                             "fontWeight": "700",
+                         }),
+                html.Div(p_label, style={
+                    "fontSize": "0.62rem",
+                    "color": f"#{C['text']}" if current else f"#{C['muted']}",
+                    "fontWeight": "700" if current else "400",
+                    "marginTop": "3px", "textAlign": "center",
+                }),
+            ], style={"display": "flex", "flexDirection": "column",
+                      "alignItems": "center", "flex": "1"}))
+
+            # Connector line between steps
+            if p_num < 4:
+                phase_steps.append(html.Div(style={
+                    "flex": "1", "height": "2px", "alignSelf": "center",
+                    "marginBottom": "16px",
+                    "background": f"#{C['green']}" if p_num < phase_num else f"#{C['border']}",
+                }))
+
+        # Recent news snippet
+        latest_headline = news[0]["headline"] if news else None
+
+        rows.append(html.Div([
+            # Left: ticker + meta
+            html.Div([
+                html.Div([
+                    html.Span(ticker, className="holding-ticker"),
+                    html.Span("ACTIVIST", style={
+                        "background": f"#{C['red']}18", "color": f"#{C['red']}",
+                        "border": f"1px solid #{C['red']}44", "borderRadius": "4px",
+                        "padding": "1px 7px", "fontSize": "0.6rem", "fontWeight": "700",
+                        "marginLeft": "6px",
+                    }),
+                ], style={"display": "flex", "alignItems": "center"}),
+                html.Div(filer, style={"fontSize": "0.72rem", "color": f"#{C['muted']}",
+                                       "marginTop": "2px"}),
+                html.Div(f"{pct:.1%} owned", style={"fontSize": "0.7rem",
+                                                     "color": f"#{C['red']}",
+                                                     "fontWeight": "600"}),
+                *([html.Div(f"📰 {latest_headline[:70]}…" if len(latest_headline) > 70 else f"📰 {latest_headline}",
+                            style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
+                                   "marginTop": "4px", "fontStyle": "italic"})]
+                  if latest_headline else []),
+            ], style={"minWidth": "160px", "marginRight": "16px"}),
+            # Right: phase bar
+            html.Div(phase_steps, style={
+                "display": "flex", "alignItems": "flex-start",
+                "flex": "1", "paddingTop": "4px",
+            }),
+        ], style={
+            "display": "flex", "alignItems": "flex-start",
+            "background": f"#{C['card2']}", "borderRadius": "10px",
+            "padding": "12px 16px", "border": f"1px solid #{C['border']}",
+            "borderLeft": f"3px solid #{C['red']}",
+            "marginBottom": "0.6rem",
+        }))
+
+    return html.Div([
+        html.Div([
+            html.Span("⚔️  Activist Battlefield", className="whale-name"),
+            html.Span("SC 13D campaign tracker · phase auto-detected from news",
+                      className="whale-meta"),
+        ], style={"display": "flex", "alignItems": "center", "gap": "10px",
+                  "marginBottom": "0.7rem"}),
+        *rows,
+    ])
 
 
 # ── COMPONENT BUILDERS ─────────────────────────────────────────────────────────
@@ -305,6 +557,7 @@ def build_whale_tab():
         ))
         sections.append(dcc.Graph(figure=fig, config={"displayModeBar": False},
                                   style={"marginBottom": "0.5rem"}))
+        sections.append(build_sector_context(rotation))
 
     # Per-whale sections
     sig_priority = {"AGGRESSIVE_BUY": 4, "NEW_ENTRY": 3, "HIGH_CONCENTRATION": 2, "HOLD": 0}
@@ -356,51 +609,56 @@ def build_whale_tab():
                 cards.append(html.Div())
             sections.append(html.Div(cards, className="grid-4"))
 
-    # ── SC 13D/G activist / passive stake filings ────────────────────────────
+    # ── SC 13D/G filings — activist battlefield + passive cards ─────────────────
     if activist:
-        sections.append(html.Div([
-            html.Div([
-                html.Span("📋  SC 13D / 13G Filings", className="whale-name"),
-                html.Span("≥5% ownership disclosures · 5-10 day lag",
-                          className="whale-meta"),
-            ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
-        ], className="whale-header"))
+        # Activist Battlefield (13D only — with phase timeline)
+        sections.append(build_activist_battlefield(activist))
 
-        act_cards = []
-        for ticker, f in sorted(activist.items(),
-                                 key=lambda x: x[1].get("pct_outstanding", 0),
-                                 reverse=True):
-            sig  = f.get("signal", "LARGE_PASSIVE_STAKE")
-            si   = SIG.get(sig, SIG["HOLD"])
-            pct  = f.get("pct_outstanding", 0)
-            form = f.get("form_type", "SC 13G")
-            act_cards.append(html.Div([
+        # Passive 13G cards (unchanged layout)
+        passive = {k: v for k, v in activist.items()
+                   if v.get("form_type", "") not in ("SC 13D", "13D")}
+        if passive:
+            sections.append(html.Div([
                 html.Div([
-                    html.Span(ticker, className="holding-ticker"),
-                    html.Span(si["label"], style={
-                        "background": f"{si['color']}18", "color": si["color"],
-                        "borderRadius": "4px", "padding": "1px 7px",
-                        "fontSize": "0.6rem", "fontWeight": "700",
-                    }),
-                ], className="holding-header"),
-                html.Div(f.get("filer", ""), className="holding-company"),
-                html.Div([
-                    html.Div([html.Div("Form",    className="stat-label"),
-                              html.Div(form,      className="stat-value", style={"fontSize": "0.75rem"})]),
-                    html.Div([html.Div("% Owned", className="stat-label"),
-                              html.Div(f"{pct:.1%}", className="stat-value",
-                                       style={"color": si["color"]})],
-                             style={"textAlign": "right"}),
-                ], className="holding-stats"),
-            ], className="holding-card",
-               style={"borderTop": f"2px solid {si['color']}"}))
-
-        N = 4
-        for i in range(0, len(act_cards), N):
-            chunk = act_cards[i:i + N]
-            while len(chunk) < N:
-                chunk.append(html.Div())
-            sections.append(html.Div(chunk, className="grid-4"))
+                    html.Span("📋  SC 13G — Passive Stakes", className="whale-name"),
+                    html.Span("≥5% ownership · no activist intent",
+                              className="whale-meta"),
+                ], style={"display": "flex", "alignItems": "center", "gap": "10px"}),
+            ], className="whale-header"))
+            act_cards = []
+            for ticker, f in sorted(passive.items(),
+                                     key=lambda x: x[1].get("pct_outstanding", 0),
+                                     reverse=True):
+                sig  = f.get("signal", "LARGE_PASSIVE_STAKE")
+                si   = SIG.get(sig, SIG["HOLD"])
+                pct  = f.get("pct_outstanding", 0)
+                act_cards.append(html.Div([
+                    html.Div([
+                        html.Span(ticker, className="holding-ticker"),
+                        html.Span(si["label"], style={
+                            "background": f"{si['color']}18", "color": si["color"],
+                            "borderRadius": "4px", "padding": "1px 7px",
+                            "fontSize": "0.6rem", "fontWeight": "700",
+                        }),
+                    ], className="holding-header"),
+                    html.Div(f.get("filer", ""), className="holding-company"),
+                    html.Div([
+                        html.Div([html.Div("Form", className="stat-label"),
+                                  html.Div(f.get("form_type", "SC 13G"),
+                                           className="stat-value", style={"fontSize": "0.75rem"})]),
+                        html.Div([html.Div("% Owned", className="stat-label"),
+                                  html.Div(f"{pct:.1%}", className="stat-value",
+                                           style={"color": si["color"]})],
+                                 style={"textAlign": "right"}),
+                    ], className="holding-stats"),
+                ], className="holding-card",
+                   style={"borderTop": f"2px solid {si['color']}"}))
+            N = 4
+            for i in range(0, len(act_cards), N):
+                chunk = act_cards[i:i + N]
+                while len(chunk) < N:
+                    chunk.append(html.Div())
+                sections.append(html.Div(chunk, className="grid-4"))
 
     # ── Form 4 insider transactions ───────────────────────────────────────────
     if insiders:
