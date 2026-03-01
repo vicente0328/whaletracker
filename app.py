@@ -3051,7 +3051,7 @@ def _bt_period_styles(years):
 )
 def run_bt(n_clicks, years, capital):
     import plotly.graph_objects as go
-    from src.backtester import run_backtest
+    from src.backtester import run_backtest, load_historical_signals
 
     _empty = ("—",) * 8 + (html.Div(), html.Div())
     if not n_clicks:
@@ -3059,6 +3059,28 @@ def run_bt(n_clicks, years, capital):
 
     years   = int(years   or 3)
     capital = float(capital or 100_000)
+
+    # ── Check pre-computed signals file exists ─────────────────────────────
+    if load_historical_signals() is None:
+        msg = html.Div([
+            html.Div("⚠ 사전 계산 데이터 없음", style={
+                "fontSize": "1rem", "fontWeight": "800",
+                "color": f"#{C['amber']}", "marginBottom": "8px",
+            }),
+            html.Div(
+                "백테스트를 실행하려면 먼저 서버에서 시그널 사전 계산을 실행해야 합니다.",
+                style={"fontSize": "0.82rem", "color": f"#{C['muted']}",
+                       "marginBottom": "6px"},
+            ),
+            html.Code(
+                "python scripts/precompute_signals.py --years 5",
+                style={"fontSize": "0.78rem", "color": f"#{C['green']}",
+                       "background": f"#{C['card2']}", "borderRadius": "6px",
+                       "padding": "6px 12px", "display": "block",
+                       "fontFamily": "monospace"},
+            ),
+        ], style={"padding": "1.5rem", "maxWidth": "540px"})
+        return ("N/A",) * 8 + (msg, html.Div())
 
     try:
         result = run_backtest(years=years, initial_capital=capital, min_signal="STRONG BUY")
@@ -3070,33 +3092,39 @@ def run_bt(n_clicks, years, capital):
         return ("ERR",) * 8 + (err, html.Div())
 
     if result is None:
-        msg = html.Div(
-            "Not enough historical data from EDGAR / FMP to run the backtest. "
-            "Ensure FMP_API_KEY is set and the API has historical price data.",
-            style={"color": f"#{C['amber']}", "padding": "1rem",
-                   "fontSize": "0.85rem", "maxWidth": "520px"},
-        )
+        msg = html.Div([
+            html.Div("⚠ 데이터 부족", style={
+                "fontSize": "1rem", "fontWeight": "800",
+                "color": f"#{C['amber']}", "marginBottom": "8px",
+            }),
+            html.Div(
+                f"선택한 {years}년 기간에 해당하는 분기 데이터가 충분하지 않습니다. "
+                "precompute_signals.py를 --years 옵션을 높여 다시 실행하거나 "
+                "FMP_API_KEY가 올바르게 설정되어 있는지 확인하세요.",
+                style={"fontSize": "0.82rem", "color": f"#{C['muted']}"},
+            ),
+        ], style={"padding": "1rem", "maxWidth": "520px"})
         return ("N/A",) * 8 + (msg, html.Div())
 
-    m   = result.metrics
-    _pct = lambda v: f"{v:+.1f}%" if v else "—"
-    _r   = lambda v: f"{v:.2f}"   if v else "—"
-    _usd = lambda v: f"${v:,.0f}" if v else "—"
+    m = result.metrics
+    _sgn = lambda v: f"{v:+.1f}%" if v is not None else "—"
+    _pct = lambda v: f"{v:.1f}%"  if v is not None else "—"
+    _r   = lambda v: f"{v:.2f}"   if v is not None else "—"
+    _usd = lambda v: f"${v:,.0f}" if v is not None else "—"
 
-    total  = _pct(m.get("total_return_pct"))
-    alpha  = _pct(m.get("alpha_pct"))
-    ann    = _pct(m.get("annualized_return_pct"))
-    dd     = f"{m.get('max_drawdown_pct', 0):.1f}%"
+    total  = _sgn(m.get("total_return_pct"))
+    alpha  = _sgn(m.get("alpha_pct"))
+    ann    = _sgn(m.get("annualized_return_pct"))
+    dd     = _pct(m.get("max_drawdown_pct"))
     sharpe = _r(m.get("sharpe_ratio"))
-    win    = f"{m.get('win_rate_pct', 0):.0f}%"
+    win    = _pct(m.get("win_rate_pct"))
     trades = str(m.get("n_trades", 0))
     final  = _usd(m.get("final_value"))
 
-    # ── Chart ─────────────────────────────────────────────────────────────
+    # ── Portfolio vs SPY chart ─────────────────────────────────────────────
     port_s  = result.portfolio_series
     bench_s = result.benchmark_series
 
-    # normalise to % gain from start
     port_pct  = (port_s  / capital - 1) * 100
     bench_pct = (bench_s / capital - 1) * 100
 
@@ -3104,27 +3132,40 @@ def run_bt(n_clicks, years, capital):
     fig.add_trace(go.Scatter(
         x=port_pct.index.tolist(), y=port_pct.values.tolist(),
         name="WhaleTracker", mode="lines",
-        line=dict(color=f"#{C['blue']}", width=2),
+        line=dict(color=f"#{C['blue']}", width=2.5),
         hovertemplate="%{x}<br>%{y:.1f}%<extra>WhaleTracker</extra>",
     ))
     fig.add_trace(go.Scatter(
         x=bench_pct.index.tolist(), y=bench_pct.values.tolist(),
-        name="SPY (benchmark)", mode="lines",
+        name="SPY", mode="lines",
         line=dict(color=f"#{C['muted']}", width=1.5, dash="dot"),
         hovertemplate="%{x}<br>%{y:.1f}%<extra>SPY</extra>",
     ))
-    # Add vertical lines for rebalancing events
+    # Rebalancing markers — use QuarterSnapshot.signal_date (dataclass attribute)
     for ql in result.quarterly_log:
         fig.add_vline(
-            x=ql["date"], line_width=1,
+            x=ql.signal_date, line_width=1,
             line_dash="dot", line_color=f"#{C['border']}",
         )
+
+    # Signal data provenance note
+    src_note = ""
+    if result.signals_source:
+        try:
+            ts = datetime.fromisoformat(result.signals_source.replace("Z", "+00:00"))
+            src_note = f"시그널 계산: {ts.strftime('%Y-%m-%d %H:%M')} UTC"
+        except Exception:
+            src_note = f"시그널 계산: {result.signals_source[:16]}"
 
     fig.update_layout(
         paper_bgcolor=f"#{C['card']}",
         plot_bgcolor=f"#{C['card']}",
         font=dict(family="Inter, sans-serif", color=f"#{C['text']}"),
-        margin=dict(l=10, r=10, t=10, b=10),
+        margin=dict(l=10, r=10, t=30 if src_note else 10, b=10),
+        title=dict(
+            text=src_note, font=dict(size=10, color=f"#{C['muted']}"),
+            x=0.99, xanchor="right",
+        ) if src_note else None,
         legend=dict(
             orientation="h", x=0.01, y=0.99,
             bgcolor="rgba(0,0,0,0)",
@@ -3135,49 +3176,91 @@ def run_bt(n_clicks, years, capital):
         yaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
                    linecolor=f"#{C['border']}", ticksuffix="%"),
         hovermode="x unified",
-        height=340,
+        height=360,
     )
     chart = dcc.Graph(figure=fig, config={"displayModeBar": False},
                       style={"borderRadius": "12px", "overflow": "hidden",
                              "border": f"1px solid #{C['border']}"})
 
-    # ── Trade log ─────────────────────────────────────────────────────────
+    # ── Quarterly rebalancing log ──────────────────────────────────────────
+    q_log_table = html.Div()
+    if result.quarterly_log:
+        _qth = lambda label: html.Th(label, style={
+            "padding": "6px 10px", "fontSize": "0.63rem", "fontWeight": "700",
+            "color": f"#{C['muted']}", "textAlign": "left",
+            "textTransform": "uppercase", "letterSpacing": "0.06em",
+            "borderBottom": f"1px solid #{C['border']}",
+        })
+        _qtd = lambda val, color=None: html.Td(val, style={
+            "padding": "5px 10px", "fontSize": "0.73rem",
+            "color": f"#{color or C['text']}", "verticalAlign": "top",
+        })
+        q_rows = []
+        for ql in result.quarterly_log:
+            sb_str = "  ".join(ql.strong_buys[:10])
+            held   = "  ".join(ql.holdings[:10])
+            q_rows.append(html.Tr([
+                _qtd(ql.label,       C["amber"]),
+                _qtd(ql.report_date, C["muted"]),
+                _qtd(ql.signal_date, C["muted"]),
+                _qtd(f"{len(ql.strong_buys)} tickers", C["green"]),
+                _qtd(sb_str or "—"),
+                _qtd(f"${ql.port_value:,.0f}", C["blue"]),
+            ]))
+        q_header = html.Tr([
+            _qth("Quarter"), _qth("Report Date"), _qth("Signal Date"),
+            _qth("Strong Buys"), _qth("Tickers"), _qth("Port. Value"),
+        ])
+        q_log_table = html.Div([
+            html.Div("분기별 리밸런싱 기록", style={
+                "fontSize": "0.78rem", "fontWeight": "700",
+                "color": f"#{C['text']}", "marginBottom": "8px",
+            }),
+            html.Div(
+                html.Table(
+                    [html.Thead(q_header), html.Tbody(q_rows)],
+                    style={"width": "100%", "borderCollapse": "collapse"},
+                ),
+                style={"overflowX": "auto"},
+            ),
+        ], style={
+            "background": f"#{C['card']}", "borderRadius": "12px",
+            "border": f"1px solid #{C['border']}", "padding": "1rem",
+            "marginBottom": "1rem",
+        })
+
+    # ── Individual trade log ───────────────────────────────────────────────
     buy_trades = [t for t in result.trades if t.action == "BUY"]
-    if not buy_trades:
-        trade_table = html.Div("No trades recorded.", style={"color": f"#{C['muted']}",
-                                                              "fontSize": "0.8rem"})
-    else:
+    trade_table = html.Div()
+    if buy_trades:
         _th = lambda label: html.Th(label, style={
-            "padding": "6px 12px", "fontSize": "0.65rem", "fontWeight": "700",
+            "padding": "6px 12px", "fontSize": "0.63rem", "fontWeight": "700",
             "color": f"#{C['muted']}", "textAlign": "left",
             "textTransform": "uppercase", "letterSpacing": "0.06em",
             "borderBottom": f"1px solid #{C['border']}",
         })
         _td = lambda val, color=None: html.Td(val, style={
-            "padding": "5px 12px", "fontSize": "0.75rem",
+            "padding": "5px 12px", "fontSize": "0.73rem",
             "color": f"#{color or C['text']}", "whiteSpace": "nowrap",
         })
-
         rows = []
-        for t in buy_trades[-50:]:   # last 50 BUY entries to keep page short
+        for t in buy_trades[-60:]:
             rec_color = C["green"] if "STRONG" in t.signal else C["blue"]
             rows.append(html.Tr([
-                _td(t.date,    C["muted"]),
-                _td(t.ticker,  C["blue"]),
-                _td(t.company[:28]),
-                _td(t.signal,  rec_color),
+                _td(t.date,             C["muted"]),
+                _td(t.ticker,           C["blue"]),
+                _td(t.company[:26]),
+                _td(t.signal,           rec_color),
                 _td(f"{t.score:.1f}",   C["amber"]),
                 _td(f"${t.price:,.2f}"),
                 _td(f"${t.value:,.0f}", C["green"]),
             ]))
-
         header = html.Tr([
             _th("Date"), _th("Ticker"), _th("Company"),
             _th("Signal"), _th("Score"), _th("Price"), _th("Value"),
         ])
-
         trade_table = html.Div([
-            html.Div("Trade Log", style={
+            html.Div("매수 내역 (최근 60건)", style={
                 "fontSize": "0.78rem", "fontWeight": "700",
                 "color": f"#{C['text']}", "marginBottom": "8px",
             }),
@@ -3191,7 +3274,8 @@ def run_bt(n_clicks, years, capital):
             "border": f"1px solid #{C['border']}", "padding": "1rem",
         })
 
-    return total, alpha, ann, dd, sharpe, win, trades, final, chart, trade_table
+    log_section = html.Div([q_log_table, trade_table])
+    return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section
 
 
 # ── CALLBACKS ──────────────────────────────────────────────────────────────────
