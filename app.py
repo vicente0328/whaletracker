@@ -2459,7 +2459,7 @@ def build_auth_modal():
                 # ── Google Sign-In (only when GOOGLE_CLIENT_ID is configured) ──
                 *([
                     html.Div([
-                        html.Div("or", style={
+                        html.Div(style={
                             "textAlign": "center", "color": f"#{C['muted']}",
                             "fontSize": "0.78rem", "margin": "14px 0 12px",
                             "display": "flex", "alignItems": "center", "gap": "8px",
