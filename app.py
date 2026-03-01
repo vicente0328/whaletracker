@@ -33,7 +33,8 @@ from src.ticker_list import TICKER_OPTIONS
 from src.news_collector import search_ticker_news
 
 load_dotenv()
-DATA_MODE = os.getenv("DATA_MODE", "mock")
+DATA_MODE        = os.getenv("DATA_MODE", "mock")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 
 # ── DATA (loaded once at startup) ──────────────────────────────────────────────
 filings          = fetch_all_whale_filings()
@@ -2431,6 +2432,32 @@ def build_auth_modal():
                     "padding": "10px", "fontSize": "0.9rem", "fontWeight": "700",
                     "cursor": "pointer",
                 }),
+
+                # ── Google Sign-In (only when GOOGLE_CLIENT_ID is configured) ──
+                *([
+                    html.Div([
+                        html.Div("or", style={
+                            "textAlign": "center", "color": f"#{C['muted']}",
+                            "fontSize": "0.78rem", "margin": "14px 0 12px",
+                            "display": "flex", "alignItems": "center", "gap": "8px",
+                        }, children=[
+                            html.Hr(style={"flex": "1", "border": "none",
+                                           "borderTop": f"1px solid #{C['border']}"}),
+                            html.Span("or"),
+                            html.Hr(style={"flex": "1", "border": "none",
+                                           "borderTop": f"1px solid #{C['border']}"}),
+                        ]),
+                        # GSI renders its button into this div
+                        html.Div(id="g_id_signin",
+                                 style={"display": "flex", "justifyContent": "center",
+                                        "marginBottom": "6px"}),
+                        html.Div(id="google-auth-error", style={
+                            "color": f"#{C['red']}", "fontSize": "0.78rem",
+                            "textAlign": "center", "minHeight": "16px",
+                        }),
+                    ]),
+                ] if GOOGLE_CLIENT_ID else []),
+
             ], style={"padding": "0 4px 20px"}),
 
         ], className="modal-box", style={"maxWidth": "380px"}),
@@ -2484,6 +2511,28 @@ app = Dash(
 )
 server = app.server  # Gunicorn entry point
 
+# Inject Google Identity Services library + pass Client ID to JS
+if GOOGLE_CLIENT_ID:
+    app.index_string = f"""<!DOCTYPE html>
+<html>
+  <head>
+    {{%metas%}}
+    <title>{{%title%}}</title>
+    {{%favicon%}}
+    {{%css%}}
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>window.GOOGLE_CLIENT_ID = "{GOOGLE_CLIENT_ID}";</script>
+  </head>
+  <body>
+    {{%app_entry%}}
+    <footer>
+      {{%config%}}
+      {{%scripts%}}
+      {{%renderer%}}
+    </footer>
+  </body>
+</html>"""
+
 # ── LAYOUT ─────────────────────────────────────────────────────────────────────
 app.layout = html.Div([
 
@@ -2491,6 +2540,8 @@ app.layout = html.Div([
     dcc.Store(id="watchlist-store",       storage_type="local",   data=[]),
     dcc.Store(id="auth-store",            storage_type="session", data=None),
     dcc.Store(id="portfolio-edit-store",  storage_type="session", data=portfolio),
+    # Google credential bridge (memory — cleared on page reload)
+    dcc.Store(id="google-cred-store",     storage_type="memory",  data=None),
 
     # Header
     html.Div([
@@ -2543,6 +2594,9 @@ app.layout = html.Div([
 
     # Auth Modal
     build_auth_modal(),
+
+    # Hidden Google auth bridge (always in DOM)
+    html.Button(id="google-cred-trigger", n_clicks=0, style={"display": "none"}),
 
 ], className="app-shell")
 
@@ -2825,6 +2879,58 @@ def handle_logout(n_clicks):
     if not n_clicks:
         return no_update, no_update
     return None, portfolio  # clear auth; reset edit store to file-based portfolio
+
+
+# ── GOOGLE SIGN-IN CALLBACKS ────────────────────────────────────────────────────
+
+# Step 1: Clientside — read window._googleCredential (set by google_auth.js)
+#         and store it in google-cred-store to trigger the server callback.
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (!n_clicks) return window.dash_clientside.no_update;
+        var cred = window._googleCredential || null;
+        window._googleCredential = null;   // consume once
+        return cred;
+    }
+    """,
+    Output("google-cred-store",    "data"),
+    Input("google-cred-trigger",   "n_clicks"),
+    prevent_initial_call=True,
+)
+
+
+# Step 2: Server — exchange Google ID token with Firebase, update auth-store.
+_google_outputs = [
+    Output("auth-store",           "data",  allow_duplicate=True),
+    Output("portfolio-edit-store", "data",  allow_duplicate=True),
+    Output("auth-modal",           "style", allow_duplicate=True),
+]
+if GOOGLE_CLIENT_ID:
+    _google_outputs.append(Output("google-auth-error", "children"))
+
+@app.callback(
+    *_google_outputs,
+    Input("google-cred-store", "data"),
+    prevent_initial_call=True,
+)
+def handle_google_sign_in(google_id_token):
+    show_err = GOOGLE_CLIENT_ID  # only return error output when element exists
+
+    if not google_id_token:
+        base = (no_update, no_update, no_update)
+        return (*base, "") if show_err else base
+
+    try:
+        user = fb.sign_in_with_google(google_id_token)
+    except fb.FirebaseError as exc:
+        base = (no_update, no_update, no_update)
+        return (*base, str(exc)) if show_err else base
+
+    cloud_portfolio = fb.get_portfolio(user["uid"], user["idToken"])
+    edit_store_data = cloud_portfolio if cloud_portfolio else portfolio
+    base = (user, edit_store_data, {"display": "none"})
+    return (*base, "") if show_err else base
 
 
 # ── PORTFOLIO EDITOR CALLBACKS ─────────────────────────────────────────────────

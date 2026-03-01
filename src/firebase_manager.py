@@ -127,6 +127,44 @@ def login_user(email: str, password: str) -> dict:
     }
 
 
+def sign_in_with_google(google_id_token: str) -> dict:
+    """Exchange a Google ID token for a Firebase session.
+
+    The ID token comes from Google Identity Services (client-side button).
+    Firebase's signInWithIdp REST endpoint verifies it and returns a
+    Firebase idToken that can be used for Firestore calls.
+
+    Returns {uid, email, idToken} on success.
+    Raises FirebaseError on failure.
+    """
+    if not is_configured():
+        raise FirebaseNotConfiguredError(
+            "FIREBASE_API_KEY and FIREBASE_PROJECT_ID must be set."
+        )
+
+    resp = requests.post(
+        f"{_AUTH_BASE}:signInWithIdp?key={_API_KEY}",
+        json={
+            "postBody":            f"id_token={google_id_token}&providerId=google.com",
+            "requestUri":          "http://localhost",
+            "returnIdpCredential": True,
+            "returnSecureToken":   True,
+        },
+        timeout=10,
+    )
+    data = resp.json()
+    if "error" in data:
+        msg = data["error"].get("message", "Google sign-in failed")
+        raise FirebaseError(f"Google sign-in failed: {msg}")
+
+    logger.info("firebase: Google sign-in — %s", data.get("email"))
+    return {
+        "uid":     data["localId"],
+        "email":   data.get("email", ""),
+        "idToken": data["idToken"],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Firestore portfolio storage (REST API)
 # ---------------------------------------------------------------------------
