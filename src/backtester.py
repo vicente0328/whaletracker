@@ -44,7 +44,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _FMP_KEY  = os.getenv("FMP_API_KEY", "")
-_FMP_BASE = "https://financialmodelingprep.com/api/v3"
+_FMP_BASE = "https://financialmodelingprep.com/stable"
 
 _ROOT           = Path(__file__).parent.parent
 _SIGNALS_FILE   = _ROOT / "data" / "historical_signals.json"
@@ -142,40 +142,25 @@ def _fetch_prices_fmp(
     if not missing:
         return {t: cache[t] for t in tickers}
 
-    def _store(data: dict, fallback_sym: str) -> None:
-        if "historicalStockList" in data:
-            for item in data["historicalStockList"]:
-                sym  = item.get("symbol", "").upper()
-                hist = item.get("historical", [])
-                if hist:
-                    cache[sym] = pd.Series(
-                        {row["date"]: row["close"] for row in hist},
-                        dtype=float,
-                    ).sort_index()
-        elif "historical" in data:
-            hist = data["historical"]
-            if hist:
-                cache[fallback_sym.upper()] = pd.Series(
-                    {row["date"]: row["close"] for row in hist},
-                    dtype=float,
-                ).sort_index()
-
-    batch_size = 5
-    for i in range(0, len(missing), batch_size):
-        batch   = [t.upper() for t in missing[i:i + batch_size]]
-        symbols = ",".join(batch)
+    for ticker in missing:
+        sym = ticker.upper()
         try:
             r = requests.get(
-                f"{_FMP_BASE}/historical-price-full/{symbols}",
-                params={"from": from_date, "to": to_date, "apikey": _FMP_KEY},
+                f"{_FMP_BASE}/historical-price-eod/light",
+                params={"symbol": sym, "from": from_date, "to": to_date,
+                        "apikey": _FMP_KEY},
                 timeout=30,
             )
             r.raise_for_status()
-            _store(r.json(), batch[0])
+            rows = r.json()           # list of {symbol, date, price, volume}
+            if isinstance(rows, list) and rows:
+                cache[sym] = pd.Series(
+                    {row["date"]: float(row["price"]) for row in rows},
+                    dtype=float,
+                ).sort_index()
         except Exception as exc:
-            logger.warning("[backtester] FMP price fetch failed (%s): %s", symbols, exc)
-        if i + batch_size < len(missing):
-            time.sleep(0.4)
+            logger.warning("[backtester] FMP price fetch failed (%s): %s", sym, exc)
+        time.sleep(0.25)
 
     return {t: cache[t] for t in tickers if t in cache}
 
