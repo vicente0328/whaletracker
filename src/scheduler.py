@@ -106,11 +106,13 @@ def start(app_data: dict[str, Any]) -> None:
     )
 
     # ── Daily news alert job ────────────────────────────────────────────────
+    # Runs every hour at :10; the job itself checks the user's preferred hour
+    # from daily_news_sub.json so no restart is needed when settings change.
     _scheduler.add_job(
         _daily_news_job,
         trigger="cron",
-        hour=DAILY_NEWS_HOUR,
-        minute=10,          # 10 min after the hour so it doesn't clash with digest
+        hour="*",
+        minute=10,
         id="daily_news",
         replace_existing=True,
     )
@@ -280,44 +282,63 @@ def _realtime_form4_job() -> None:
     logger.info("[scheduler] Form 4 poll complete — %d new alerts", new_alerts)
 
 
-def _is_news_sub_enabled() -> bool:
-    """Return True if the user has enabled the Daily News Slack subscription."""
+def _read_news_settings() -> dict:
+    """Return the full daily-news settings dict from daily_news_sub.json."""
     import json  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
 
     sub_file = Path(__file__).parent.parent / "daily_news_sub.json"
+    defaults = {"enabled": False, "hour": DAILY_NEWS_HOUR, "topics": []}
     try:
         if sub_file.exists():
             data = json.loads(sub_file.read_text())
-            return bool(data.get("enabled", False))
+            return {**defaults, **data}
     except Exception:
         pass
-    return False
+    return defaults
 
 
 def _daily_news_job() -> None:
-    """Send the day's top financial news headline to Slack if subscription is ON."""
-    if not _is_news_sub_enabled():
+    """Send the day's top financial news headline to Slack if subscription is ON
+    and the current UTC hour matches the user-configured delivery hour."""
+    settings = _read_news_settings()
+
+    if not settings.get("enabled"):
         logger.info("[scheduler] Daily news subscription disabled — skipping")
         return
 
+    # Check if current UTC hour matches the user's chosen delivery hour
+    current_hour = datetime.now(timezone.utc).hour
+    target_hour  = int(settings.get("hour", DAILY_NEWS_HOUR))
+    if current_hour != target_hour:
+        logger.debug(
+            "[scheduler] Daily news: current hour %d ≠ target %d — skipping",
+            current_hour, target_hour,
+        )
+        return
+
     try:
-        from src.news_collector import fetch_market_news      # noqa: PLC0415
-        from src.slack_notifier import send_daily_news_alert  # noqa: PLC0415
+        from src.news_collector import fetch_market_news, item_matches_topics  # noqa: PLC0415
+        from src.slack_notifier import send_daily_news_alert                   # noqa: PLC0415
     except Exception as exc:
         logger.error("[scheduler] Daily news import error: %s", exc)
         return
 
     try:
-        news = fetch_market_news(1)
-        if news:
-            send_daily_news_alert(news[0])
+        topics = settings.get("topics") or []
+        # Fetch a larger pool to find a topic-matching article
+        candidates = fetch_market_news(20)
+        if topics:
+            candidates = [n for n in candidates if item_matches_topics(n["headline"], topics)]
+
+        if candidates:
+            send_daily_news_alert(candidates[0])
             logger.info(
-                "[scheduler] Daily news sent: %s",
-                news[0].get("headline", "")[:60],
+                "[scheduler] Daily news sent (topics=%s): %s",
+                topics or "all", candidates[0].get("headline", "")[:60],
             )
         else:
-            logger.info("[scheduler] No news available — daily news skipped")
+            logger.info("[scheduler] No matching news for topics %s — skipping", topics)
     except Exception as exc:
         logger.error("[scheduler] Daily news job error: %s", exc)
 

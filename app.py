@@ -39,23 +39,34 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 # ── Daily News subscription state (persisted to disk so the scheduler can read it) ─
 _NEWS_SUB_FILE = os.path.join(os.path.dirname(__file__), "daily_news_sub.json")
 
+_NEWS_TOPIC_OPTIONS = [
+    {"id": "market",       "label": "📈 Market",       "desc": "주가·지수·시장 흐름"},
+    {"id": "macro",        "label": "🏛️ Macro",         "desc": "Fed·금리·CPI·GDP"},
+    {"id": "earnings",     "label": "💰 Earnings",      "desc": "실적·M&A·IPO"},
+    {"id": "geopolitical", "label": "⚔️ Geopolitical",  "desc": "분쟁·OPEC·제재"},
+    {"id": "crypto",       "label": "₿ Crypto",         "desc": "비트코인·이더리움"},
+]
+_ALL_TOPIC_IDS = [t["id"] for t in _NEWS_TOPIC_OPTIONS]
 
-def _read_news_sub() -> bool:
-    """Return True if the user has enabled the Daily News Slack subscription."""
+_NEWS_SUB_DEFAULTS = {"enabled": False, "hour": 8, "topics": _ALL_TOPIC_IDS}
+
+
+def _read_news_sub() -> dict:
+    """Return full news subscription settings dict."""
     try:
         if os.path.exists(_NEWS_SUB_FILE):
-            with open(_NEWS_SUB_FILE) as _f:
-                return bool(json.load(_f).get("enabled", False))
+            data = json.load(open(_NEWS_SUB_FILE))
+            return {**_NEWS_SUB_DEFAULTS, **data}
     except Exception:
         pass
-    return False
+    return dict(_NEWS_SUB_DEFAULTS)
 
 
-def _write_news_sub(enabled: bool) -> None:
-    """Persist the Daily News subscription state so the scheduler can read it."""
+def _write_news_sub(settings: dict) -> None:
+    """Persist the full news subscription settings so the scheduler can read it."""
     try:
         with open(_NEWS_SUB_FILE, "w") as _f:
-            json.dump({"enabled": enabled}, _f)
+            json.dump(settings, _f)
     except Exception:
         pass
 
@@ -2567,6 +2578,8 @@ app.layout = html.Div([
     dcc.Store(id="google-cred-store",     storage_type="memory",  data=None),
     # Daily News Slack subscription state (local = survives page refresh)
     dcc.Store(id="daily-news-sub-store",  storage_type="local",   data=_read_news_sub()),
+    # Controls whether the settings panel is open
+    dcc.Store(id="daily-news-settings-open", storage_type="memory", data=False),
 
     # Header
     html.Div([
@@ -2588,14 +2601,14 @@ app.layout = html.Div([
         ], className="header-right"),
     ], className="header"),
 
-    # News section — banner + Daily News subscription toggle
+    # News section — banner + Daily News subscription toggle + settings panel
     html.Div([
         # Toggle row (always visible)
         html.Div([
             html.Button(
                 id="daily-news-toggle",
                 n_clicks=0,
-                title="매일 아침 Slack으로 주요 금융 뉴스 1건을 받습니다",
+                title="매일 Slack으로 주요 금융 뉴스 1건을 받습니다",
                 style={
                     "fontSize": "0.65rem", "fontWeight": "700",
                     "padding": "3px 10px", "borderRadius": "20px",
@@ -2603,10 +2616,76 @@ app.layout = html.Div([
                     "transition": "all 0.2s",
                 },
             ),
+            html.Button(
+                "⚙",
+                id="daily-news-settings-btn",
+                n_clicks=0,
+                title="알림 시간 및 토픽 설정",
+                style={
+                    "fontSize": "0.75rem", "padding": "2px 7px",
+                    "borderRadius": "6px", "cursor": "pointer",
+                    "border": f"1px solid #{C['border']}",
+                    "background": "transparent",
+                    "color": f"#{C['muted']}", "marginLeft": "6px",
+                    "transition": "all 0.2s",
+                },
+            ),
         ], style={
             "display": "flex", "justifyContent": "flex-end",
             "alignItems": "center", "padding": "2px 0 4px",
         }),
+
+        # ── Settings panel (collapsed by default) ────────────────────────
+        html.Div(id="daily-news-settings-panel", style={"display": "none"}, children=[
+            html.Div([
+                # Delivery time selector
+                html.Div([
+                    html.Label("⏰ 알림 시간 (UTC)",
+                               style={"fontSize": "0.7rem", "color": f"#{C['muted']}",
+                                      "marginBottom": "4px", "display": "block"}),
+                    dcc.Dropdown(
+                        id="daily-news-hour-picker",
+                        options=[{"label": f"{h:02d}:00 UTC", "value": h} for h in range(24)],
+                        value=8,
+                        clearable=False,
+                        style={"fontSize": "0.75rem", "width": "140px",
+                               "background": f"#{C['card']}", "color": f"#{C['text']}"},
+                    ),
+                ], style={"marginBottom": "10px"}),
+
+                # Topic checkboxes
+                html.Div([
+                    html.Label("📌 알림 토픽 선택",
+                               style={"fontSize": "0.7rem", "color": f"#{C['muted']}",
+                                      "marginBottom": "6px", "display": "block"}),
+                    dcc.Checklist(
+                        id="daily-news-topics-checklist",
+                        options=[
+                            {"label": html.Span([
+                                html.Span(t["label"], style={"fontWeight": "600"}),
+                                html.Span(f" — {t['desc']}",
+                                          style={"color": f"#{C['muted']}", "fontSize": "0.68rem"}),
+                            ]), "value": t["id"]}
+                            for t in _NEWS_TOPIC_OPTIONS
+                        ],
+                        value=_ALL_TOPIC_IDS,
+                        inputStyle={"marginRight": "6px", "accentColor": f"#{C['blue']}"},
+                        labelStyle={"display": "flex", "alignItems": "center",
+                                    "marginBottom": "5px", "fontSize": "0.75rem",
+                                    "cursor": "pointer"},
+                    ),
+                ]),
+
+                html.Div("설정은 자동 저장됩니다",
+                         style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
+                                "marginTop": "8px", "textAlign": "right"}),
+            ], style={
+                "background": f"#{C['card']}", "border": f"1px solid #{C['border']}",
+                "borderRadius": "8px", "padding": "12px 14px",
+                "marginBottom": "6px",
+            }),
+        ]),
+
         # News banner (loaded asynchronously after page load)
         html.Div(id="news-banner"),
     ]),
@@ -2826,45 +2905,91 @@ def load_news_banner(n_intervals):
 # ── DAILY NEWS SUBSCRIPTION CALLBACKS ──────────────────────────────────────────
 
 @app.callback(
-    Output("daily-news-toggle", "children"),
-    Output("daily-news-toggle", "style"),
+    Output("daily-news-toggle",           "children"),
+    Output("daily-news-toggle",           "style"),
+    Output("daily-news-hour-picker",      "value"),
+    Output("daily-news-topics-checklist", "value"),
     Input("daily-news-sub-store", "data"),
 )
-def update_daily_news_toggle(subscribed: bool):
-    """Reflect current subscription state in the toggle button's appearance."""
+def update_daily_news_toggle(settings):
+    """Reflect current subscription state and sync settings panel inputs."""
+    if not isinstance(settings, dict):
+        settings = _NEWS_SUB_DEFAULTS
+    subscribed = settings.get("enabled", False)
+    hour       = settings.get("hour", 8)
+    topics     = settings.get("topics") or _ALL_TOPIC_IDS
+
     _base = {
         "fontSize": "0.65rem", "fontWeight": "700",
         "padding": "3px 10px", "borderRadius": "20px",
         "cursor": "pointer", "transition": "all 0.2s",
     }
     if subscribed:
-        return (
-            "🔔 Daily News: ON",
-            {**_base,
-             "background": f"#{C['green']}22",
-             "color": f"#{C['green']}",
-             "border": f"1px solid #{C['green']}55"},
-        )
-    return (
-        "🔕 Daily News: OFF",
-        {**_base,
-         "background": f"#{C['card2']}",
-         "color": f"#{C['muted']}",
-         "border": f"1px solid {C['border']}"},
-    )
+        btn_label = "🔔 Daily News: ON"
+        btn_style = {**_base,
+                     "background": f"#{C['green']}22",
+                     "color": f"#{C['green']}",
+                     "border": f"1px solid #{C['green']}55"}
+    else:
+        btn_label = "🔕 Daily News: OFF"
+        btn_style = {**_base,
+                     "background": f"#{C['card2']}",
+                     "color": f"#{C['muted']}",
+                     "border": f"1px solid #{C['border']}"}
+    return btn_label, btn_style, hour, topics
 
 
 @app.callback(
-    Output("daily-news-sub-store", "data"),
-    Input("daily-news-toggle", "n_clicks"),
-    State("daily-news-sub-store", "data"),
+    Output("daily-news-sub-store",       "data"),
+    Input("daily-news-toggle",           "n_clicks"),
+    Input("daily-news-hour-picker",      "value"),
+    Input("daily-news-topics-checklist", "value"),
+    State("daily-news-sub-store",        "data"),
     prevent_initial_call=True,
 )
-def toggle_daily_news_sub(n_clicks: int, current: bool):
-    """Toggle subscription state and persist it so the scheduler can read it."""
-    new_state = not bool(current)
-    _write_news_sub(new_state)
-    return new_state
+def update_news_sub_settings(toggle_clicks, hour, topics, current):
+    """Handle toggle click and settings changes; persist to disk."""
+    if not isinstance(current, dict):
+        current = dict(_NEWS_SUB_DEFAULTS)
+
+    triggered = ctx.triggered_id
+
+    if triggered == "daily-news-toggle":
+        new_enabled = not bool(current.get("enabled", False))
+        new_settings = {**current, "enabled": new_enabled}
+    else:
+        # Hour or topic change — keep enabled state as-is
+        new_settings = {
+            **current,
+            "hour":   hour   if hour   is not None else current.get("hour", 8),
+            "topics": topics if topics is not None else current.get("topics", _ALL_TOPIC_IDS),
+        }
+
+    _write_news_sub(new_settings)
+    return new_settings
+
+
+@app.callback(
+    Output("daily-news-settings-panel", "style"),
+    Input("daily-news-settings-btn",    "n_clicks"),
+    State("daily-news-settings-open",   "data"),
+    prevent_initial_call=True,
+)
+def toggle_settings_panel(n_clicks, is_open):
+    """Show / hide the settings panel when ⚙ is clicked."""
+    if n_clicks:
+        is_open = not bool(is_open)
+    return {"display": "block"} if is_open else {"display": "none"}
+
+
+@app.callback(
+    Output("daily-news-settings-open", "data"),
+    Input("daily-news-settings-btn",   "n_clicks"),
+    State("daily-news-settings-open",  "data"),
+    prevent_initial_call=True,
+)
+def sync_settings_open_state(n_clicks, is_open):
+    return not bool(is_open)
 
 
 # ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────

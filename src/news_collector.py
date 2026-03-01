@@ -92,6 +92,11 @@ _MARKET_KEYWORDS: frozenset[str] = frozenset([
     "bitcoin", "ethereum", "crypto", "cryptocurrency", "digital asset",
     # trade / geopolitical with market framing
     "tariff", "trade war", "sanctions", "supply chain", "recession",
+    # geopolitical risk (market-moving conflicts & tensions)
+    "ukraine", "middle east", "iran", "taiwan", "north korea",
+    "geopolit", "opec", "opec+", "nato",
+    "military strike", "airstrike", "airstrikes", "invasion", "ceasefire",
+    "armed conflict", "war in ", "at war",
 ])
 
 # Longer phrases — safe to match as substrings
@@ -196,18 +201,87 @@ def search_ticker_news(ticker: str, n: int = 5) -> list[dict[str, Any]]:
     return matches[:n]
 
 
+# ── Topic classification ───────────────────────────────────────────────────────
+# Maps topic ID → keywords; used to filter daily-news alerts by user preference.
+TOPIC_KEYWORDS: dict[str, frozenset[str]] = {
+    "market": frozenset([
+        "stock", "stocks", "equity", "equities", "market", "markets",
+        "s&p", "nasdaq", "dow", "nyse", "ftse", "nikkei", "hang seng",
+        "index", "indices", "wall street", "trading", "rally", "selloff",
+        "sell-off", "surge", "plunge", "tumble", "volatile", "volatility",
+        "all-time high", "52-week", "bull market", "bear market",
+    ]),
+    "macro": frozenset([
+        "fed", "federal reserve", "fomc", "rate cut", "rate hike",
+        "interest rate", "inflation", "cpi", "pce", "ppi", "deflation",
+        "gdp", "jobs report", "payroll", "unemployment", "nonfarm", "nfp",
+        "yield", "treasury", "bond", "bonds", "yield curve", "spread",
+        "debt ceiling", "fiscal", "monetary", "quantitative", "recession",
+        "tariff", "trade war", "supply chain",
+    ]),
+    "earnings": frozenset([
+        "earnings", "revenue", "profit", "loss", "eps", "guidance",
+        "outlook", "quarterly", "dividend", "buyback", "share repurchase",
+        "ipo", "merger", "acquisition", "m&a", "takeover", "deal",
+        "divestiture", "valuation", "writedown", "restructuring",
+        "bankruptcy", "default", "layoffs", "hiring freeze",
+    ]),
+    "geopolitical": frozenset([
+        "ukraine", "middle east", "iran", "taiwan", "north korea",
+        "geopolit", "opec", "opec+", "nato", "sanctions",
+        "military strike", "airstrike", "airstrikes", "invasion",
+        "ceasefire", "armed conflict", "war in ", "at war",
+    ]),
+    "crypto": frozenset([
+        "bitcoin", "ethereum", "crypto", "cryptocurrency", "digital asset",
+        "defi", "blockchain", "altcoin", "stablecoin", "btc", "eth",
+    ]),
+}
+
+ALL_TOPICS = list(TOPIC_KEYWORDS.keys())
+
+
+def item_matches_topics(headline: str, topics: list[str]) -> bool:
+    """Return True if headline matches ANY of the given topic IDs."""
+    if not topics:
+        return True  # no filter → accept all
+    h = headline.lower()
+    return any(
+        any(kw in h for kw in TOPIC_KEYWORDS.get(t, frozenset()))
+        for t in topics
+    )
+
+
+def _today_str() -> str:
+    """Return today's date as 'MMM DD, YYYY' (UTC), matching _fmt_date output."""
+    return datetime.utcnow().strftime("%b %d, %Y")
+
+
+def _sort_today_first(items: list[dict]) -> list[dict]:
+    """Return items sorted so today's articles come first, others follow."""
+    today = _today_str()
+    today_items = [i for i in items if i.get("published_at") == today]
+    other_items = [i for i in items if i.get("published_at") != today]
+    return today_items + other_items
+
+
 def fetch_market_news(n: int = 5) -> list[dict[str, Any]]:
     """Return up to `n` market-relevant financial news headlines.
 
+    Guarantees at least one result is from today (UTC) when possible.
     Returns list of {headline, source, url, published_at}.
     Returns empty list on complete failure (never raises).
     """
     global _cache, _cache_ts
 
     now = datetime.utcnow()
-    if (_cache is not None and _cache_ts is not None
-            and (now - _cache_ts).total_seconds() < _CACHE_TTL_MIN * 60):
-        return _cache[:n]
+    cache_age_ok = (
+        _cache is not None and _cache_ts is not None
+        and (now - _cache_ts).total_seconds() < _CACHE_TTL_MIN * 60
+    )
+    # Use cache only when it's fresh AND contains at least one today's article
+    if cache_age_ok and any(i.get("published_at") == _today_str() for i in (_cache or [])):
+        return _sort_today_first(_cache)[:n]
 
     # Fetch a larger pool so the relevance filter has enough candidates
     fetch_target = max(n * 5, 30)
@@ -217,6 +291,9 @@ def fetch_market_news(n: int = 5) -> list[dict[str, Any]]:
         items = _fetch_newsapi(fetch_target)
     if not items:
         items = _fetch_rss(fetch_target)
+
+    # Sort today's articles to the front
+    items = _sort_today_first(items)
 
     _cache    = items
     _cache_ts = now
