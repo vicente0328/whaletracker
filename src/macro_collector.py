@@ -36,8 +36,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger    = logging.getLogger(__name__)
-_API_KEY  = os.getenv("FRED_API_KEY", "")
+_API_KEY  = os.getenv("FRED_API_KEY", "").strip()
 _BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
+
+_FMP_KEY      = os.getenv("FMP_API_KEY", "").strip()
+_FMP_BASE_URL = "https://financialmodelingprep.com/api/v4/economic"
+_FMP_PMI_MAP  = {
+    "mfg_pmi": "ISM_MANUFACTURING",
+    "svc_pmi": "ISM_NON_MANUFACTURING",
+}
 
 # ── FRED series definitions ────────────────────────────────────────────────────
 _SERIES: dict[str, dict] = {
@@ -138,18 +145,17 @@ def _fetch_from_fred() -> dict[str, dict]:
     start_date = (datetime.utcnow() - timedelta(days=760)).strftime("%Y-%m-%d")
 
     for key, meta in _SERIES.items():
+        if meta.get("pmi"):
+            continue  # PMI not available on FRED — handled by _fetch_pmi_from_fmp below
         try:
             params = {
-                "series_id":  meta["id"],
-                "api_key":    _API_KEY,
-                "file_type":  "json",
-                "sort_order": "desc",
-                "limit":      60,
+                "series_id":        meta["id"],
+                "api_key":          _API_KEY,
+                "file_type":        "json",
+                "sort_order":       "desc",
+                "limit":            60,
+                "observation_start": start_date,
             }
-            # PMI series have limited FRED history — skip date filter so we
-            # get whatever observations exist (falls back to mock if none)
-            if not meta.get("pmi"):
-                params["observation_start"] = start_date
             resp = requests.get(_BASE_URL, params=params, timeout=12)
             resp.raise_for_status()
             raw_obs = resp.json().get("observations", [])
@@ -178,7 +184,7 @@ def _fetch_from_fred() -> dict[str, dict]:
                 "unit":         meta["unit"],
                 "color":        meta["color"],
                 "desc":         meta.get("desc", ""),
-                "pmi":          meta.get("pmi", False),
+                "pmi":          False,
                 "current":      round(current, 2),
                 "prev":         round(prev, 2),
                 "change_1y":    round(current - prev, 2),
@@ -188,11 +194,20 @@ def _fetch_from_fred() -> dict[str, dict]:
         except Exception as exc:
             logger.warning("FRED fetch failed for %s (%s): %s", key, meta["id"], exc)
 
-    # Fill any missing series with mock data
+    # ── PMI from FMP ──────────────────────────────────────────────────────────
+    pmi_results = _fetch_pmi_from_fmp()
+    results.update(pmi_results)
+
+    # Fill any remaining missing series with mock data
     mock = _mock_macro()
     for key in _SERIES:
         if key not in results:
-            results[key] = mock[key]
+            mock_entry = dict(mock[key])
+            if _SERIES[key].get("pmi"):
+                # Label as mock so the UI can show "(mock)" badge
+                mock_entry["name"] = mock_entry["name"] + " (mock)"
+                mock_entry["is_mock"] = True
+            results[key] = mock_entry
 
     return results
 
@@ -211,6 +226,72 @@ def _cpi_to_yoy(obs: list[dict]) -> list[dict]:
                 "value": round((item["value"] / past - 1) * 100, 2),
             })
     return yoy
+
+
+# ---------------------------------------------------------------------------
+# FMP PMI fetcher
+# ---------------------------------------------------------------------------
+
+def _fetch_pmi_from_fmp() -> dict[str, dict]:
+    """Fetch ISM PMI data from FMP /v4/economic.
+
+    Returns dict with 'mfg_pmi' and/or 'svc_pmi' keys on success.
+    Returns {} if FMP_API_KEY is not set or all requests fail.
+    """
+    if not _FMP_KEY:
+        return {}
+
+    results: dict[str, dict] = {}
+    for key, fmp_name in _FMP_PMI_MAP.items():
+        meta = _SERIES[key]
+        try:
+            resp = requests.get(
+                _FMP_BASE_URL,
+                params={"name": fmp_name, "apikey": _FMP_KEY},
+                timeout=12,
+            )
+            resp.raise_for_status()
+            raw = resp.json()
+            if not raw or not isinstance(raw, list):
+                logger.warning("FMP PMI: empty response for %s", fmp_name)
+                continue
+
+            # FMP returns oldest-first; sort newest-first
+            obs = sorted(
+                [
+                    {"date": o["date"], "value": float(o["value"])}
+                    for o in raw
+                    if o.get("value") is not None
+                ],
+                key=lambda x: x["date"],
+                reverse=True,
+            )[:48]
+
+            if not obs:
+                continue
+
+            current  = obs[0]["value"]
+            year_idx = min(11, len(obs) - 1)
+            prev     = obs[year_idx]["value"]
+
+            results[key] = {
+                "name":         meta["name"],
+                "unit":         meta["unit"],
+                "color":        meta["color"],
+                "desc":         meta.get("desc", ""),
+                "pmi":          True,
+                "is_mock":      False,
+                "current":      round(current, 1),
+                "prev":         round(prev, 1),
+                "change_1y":    round(current - prev, 1),
+                "observations": obs,
+            }
+            logger.info("FMP PMI fetched %s (%s): current=%.1f", key, fmp_name, current)
+
+        except Exception as exc:
+            logger.warning("FMP PMI fetch failed for %s (%s): %s", key, fmp_name, exc)
+
+    return results
 
 
 # ---------------------------------------------------------------------------

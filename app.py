@@ -811,31 +811,44 @@ def build_macro_tab():
         cur  = m["current"]
         chg  = m["change_1y"]
         col  = m["color"]
-        is_pmi = m.get("pmi", False)
+        is_pmi   = m.get("pmi", False)
+        is_mock  = m.get("is_mock", False)
         if is_pmi:
             # PMI: badge shows expansion vs contraction relative to 50
             expanding = cur >= 50
             badge_color = f"#{C['green']}" if expanding else f"#{C['red']}"
             badge_text  = f"{'▲' if expanding else '▼'} {'Expanding' if expanding else 'Contracting'} ({cur:.1f})"
-            sub_elem = html.Span(badge_text, style={"color": badge_color,
-                                                     "fontWeight": "600", "fontSize": "0.72rem"})
+            sub_children = [
+                html.Span(badge_text, style={"color": badge_color,
+                                             "fontWeight": "600", "fontSize": "0.72rem"}),
+            ]
+            if is_mock:
+                sub_children.append(html.Span(" mock", style={
+                    "fontSize": "0.65rem", "color": f"#{C['muted']}",
+                    "background": f"#{C['card2']}", "borderRadius": "3px",
+                    "padding": "1px 4px", "marginLeft": "4px",
+                }))
         else:
             arrow = ("↑" if chg > 0 else "↓") if chg != 0 else "→"
             chg_color = (f"#{C['red']}" if chg > 0 and key in ("fed_rate", "cpi", "yield_10y", "unemployment")
                          else f"#{C['green']}" if chg > 0 else f"#{C['red']}")
-            sub_elem = html.Span(f"{arrow} {abs(chg):.2f}pp vs 1Y ago",
-                                 style={"color": chg_color, "fontWeight": "600",
-                                        "fontSize": "0.72rem"})
+            sub_children = [
+                html.Span(f"{arrow} {abs(chg):.2f}pp vs 1Y ago",
+                          style={"color": chg_color, "fontWeight": "600",
+                                 "fontSize": "0.72rem"}),
+            ]
         val_str = f"{cur:.1f}" if is_pmi else f"{cur:.2f}{m['unit']}"
+        # Strip " (mock)" suffix from name if present — we show it as a badge
+        display_name = m["name"].replace(" (mock)", "")
         kpi_cards.append(html.Div([
             html.Div("◈", style={
                 "position": "absolute", "right": "12px", "top": "50%",
                 "transform": "translateY(-50%)", "fontSize": "2.8rem",
                 "opacity": "0.04", "color": col, "fontWeight": "900",
             }),
-            html.Div(m["name"], className="kpi-label"),
+            html.Div(display_name, className="kpi-label"),
             html.Div(val_str, className="kpi-value"),
-            html.Div([sub_elem], className="kpi-sub"),
+            html.Div(sub_children, className="kpi-sub"),
         ], className="kpi-card", style={"borderLeft": f"3px solid {col}"}))
 
     kpi_row = html.Div(kpi_cards, className="kpi-strip", style={"marginBottom": "1rem"})
@@ -938,9 +951,12 @@ def build_macro_tab():
             annotation_font=dict(size=9, color="rgba(255,255,255,0.4)"),
             annotation_position="top right",
         )
+        pmi_title = m["name"].replace(" (mock)", "")
+        if m.get("is_mock"):
+            pmi_title += "  <span style='font-size:9px'>(mock)</span>"
         fig_pmi.update_layout(**plotly_base(
             height=200,
-            title=dict(text=m["name"],
+            title=dict(text=pmi_title,
                        font=dict(size=11, color=f"#{C['muted']}"),
                        x=0, xanchor="left"),
             xaxis=dict(showgrid=False, tickfont=dict(size=9), tickangle=-30, nticks=8),
