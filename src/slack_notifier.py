@@ -323,6 +323,119 @@ def send_rebalancing_digest(
     return _post(blocks, f"📊 Rebalancing: {text}", channel)
 
 
+def send_market_event_alert(
+    event: dict,
+    days_before: int,
+    channel: str | None = None,
+) -> bool:
+    """Fire a Slack alert N days before a high-impact market event.
+
+    Args:
+        event:       Event dict from market_events.MARKET_EVENTS.
+        days_before: How many days until the event (1, 7, …).
+        channel:     Override Slack channel (default: SLACK_ALERT_CHANNEL).
+    """
+    from datetime import date  # noqa: PLC0415
+
+    event_type   = event.get("type", "EVENT")
+    title        = event.get("title", "")
+    description  = event.get("description", "")
+    event_date   = event.get("date", date.today())
+    impact       = event.get("impact", "MEDIUM")
+
+    # Localised type label + emoji
+    type_meta = {
+        "FED_MEETING":     ("🏛️", "연준 FOMC"),
+        "CPI_RELEASE":     ("📊", "CPI 물가지수"),
+        "JOBS_REPORT":     ("💼", "고용 지표"),
+        "EARNINGS_SEASON": ("📈", "실적 시즌"),
+        "ELECTION":        ("🗳️", "선거"),
+        "DEBT_CEILING":    ("⚠️", "부채 한도"),
+    }
+    icon, type_label = type_meta.get(event_type, ("📅", "시장 이벤트"))
+
+    impact_emoji = "🔴 HIGH IMPACT" if impact == "HIGH" else "🟡 MEDIUM IMPACT"
+
+    # Urgency header
+    if days_before == 1:
+        urgency = "⚡ *내일 예정!*"
+    elif days_before <= 3:
+        urgency = f"🔔 *{days_before}일 후 예정*"
+    else:
+        urgency = f"📅 *{days_before}일 후 예정*"
+
+    date_str = event_date.strftime("%Y년 %m월 %d일 (%a)")
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"{icon} 시장 이벤트 알림 — {title}", "emoji": True}},
+        {"type": "section", "fields": [
+            {"type": "mrkdwn", "text": f"*이벤트 유형*\n{type_label}"},
+            {"type": "mrkdwn", "text": f"*예정일*\n{date_str}"},
+            {"type": "mrkdwn", "text": f"*영향도*\n{impact_emoji}"},
+            {"type": "mrkdwn", "text": f"*남은 기간*\n{urgency}"},
+        ]},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*개요*\n{description}"}},
+        {"type": "divider"},
+        {"type": "context", "elements": [
+            {"type": "mrkdwn",
+             "text": "📊 WhaleTracker AI Market Events  ·  중요 이벤트 선제 대응"}
+        ]},
+    ]
+
+    text = f"{icon} [{days_before}일 전] {title} — {date_str} | {impact_emoji}"
+    return _post(blocks, text, channel)
+
+
+def send_daily_news_alert(
+    news_item: dict[str, Any],
+    channel: str | None = None,
+) -> bool:
+    """Send the day's single top financial news headline to Slack.
+
+    Called by the daily_news scheduler job when the user has enabled the
+    Daily News subscription from the dashboard.
+    """
+    from datetime import datetime  # noqa: PLC0415
+
+    headline = news_item.get("headline", "")
+    source   = news_item.get("source", "")
+    url      = news_item.get("url", "")
+    pub      = news_item.get("published_at", "")
+
+    if not headline:
+        return False
+
+    today     = datetime.utcnow().strftime("%b %d, %Y")
+    head_text = f"<{url}|{headline}>" if url else headline
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"📰 오늘의 금융 뉴스 — {today}", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": head_text}},
+    ]
+
+    context_parts = []
+    if source:
+        context_parts.append(f"*출처:* {source}")
+    if pub:
+        context_parts.append(pub)
+    if context_parts:
+        blocks.append({"type": "context", "elements": [
+            {"type": "mrkdwn", "text": "  ·  ".join(context_parts)}
+        ]})
+
+    blocks.append({"type": "divider"})
+    blocks.append({"type": "context", "elements": [
+        {"type": "mrkdwn",
+         "text": "📊 WhaleTracker AI Daily News  ·  구독 취소: 대시보드 뉴스 섹션에서 토글 OFF"}
+    ]})
+
+    text = f"📰 오늘의 금융 뉴스 ({today}): {headline}"
+    return _post(blocks, text, channel)
+
+
 # Legacy alias kept for backward compatibility
 def send_whale_alert(recommendation: dict[str, Any], channel: str | None = None) -> bool:
     return send_strong_buy_alert(recommendation, channel)

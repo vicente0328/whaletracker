@@ -36,6 +36,29 @@ load_dotenv()
 DATA_MODE        = os.getenv("DATA_MODE", "mock")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 
+# ── Daily News subscription state (persisted to disk so the scheduler can read it) ─
+_NEWS_SUB_FILE = os.path.join(os.path.dirname(__file__), "daily_news_sub.json")
+
+
+def _read_news_sub() -> bool:
+    """Return True if the user has enabled the Daily News Slack subscription."""
+    try:
+        if os.path.exists(_NEWS_SUB_FILE):
+            with open(_NEWS_SUB_FILE) as _f:
+                return bool(json.load(_f).get("enabled", False))
+    except Exception:
+        pass
+    return False
+
+
+def _write_news_sub(enabled: bool) -> None:
+    """Persist the Daily News subscription state so the scheduler can read it."""
+    try:
+        with open(_NEWS_SUB_FILE, "w") as _f:
+            json.dump({"enabled": enabled}, _f)
+    except Exception:
+        pass
+
 # ── DATA (loaded once at startup) ──────────────────────────────────────────────
 filings          = fetch_all_whale_filings()
 
@@ -2542,6 +2565,8 @@ app.layout = html.Div([
     dcc.Store(id="portfolio-edit-store",  storage_type="session", data=portfolio),
     # Google credential bridge (memory — cleared on page reload)
     dcc.Store(id="google-cred-store",     storage_type="memory",  data=None),
+    # Daily News Slack subscription state (local = survives page refresh)
+    dcc.Store(id="daily-news-sub-store",  storage_type="local",   data=_read_news_sub()),
 
     # Header
     html.Div([
@@ -2563,8 +2588,28 @@ app.layout = html.Div([
         ], className="header-right"),
     ], className="header"),
 
-    # News banner — static container always present in layout
-    html.Div(id="news-banner"),
+    # News section — banner + Daily News subscription toggle
+    html.Div([
+        # Toggle row (always visible)
+        html.Div([
+            html.Button(
+                id="daily-news-toggle",
+                n_clicks=0,
+                title="매일 아침 Slack으로 주요 금융 뉴스 1건을 받습니다",
+                style={
+                    "fontSize": "0.65rem", "fontWeight": "700",
+                    "padding": "3px 10px", "borderRadius": "20px",
+                    "cursor": "pointer", "border": "none",
+                    "transition": "all 0.2s",
+                },
+            ),
+        ], style={
+            "display": "flex", "justifyContent": "flex-end",
+            "alignItems": "center", "padding": "2px 0 4px",
+        }),
+        # News banner (loaded asynchronously after page load)
+        html.Div(id="news-banner"),
+    ]),
     dcc.Interval(id="news-load-trigger", interval=100, max_intervals=1, n_intervals=0),
 
     # KPI strip
@@ -2777,6 +2822,49 @@ def load_news_banner(n_intervals):
         return no_update
     return build_news_banner(fetch_market_news(5))
 
+
+# ── DAILY NEWS SUBSCRIPTION CALLBACKS ──────────────────────────────────────────
+
+@app.callback(
+    Output("daily-news-toggle", "children"),
+    Output("daily-news-toggle", "style"),
+    Input("daily-news-sub-store", "data"),
+)
+def update_daily_news_toggle(subscribed: bool):
+    """Reflect current subscription state in the toggle button's appearance."""
+    _base = {
+        "fontSize": "0.65rem", "fontWeight": "700",
+        "padding": "3px 10px", "borderRadius": "20px",
+        "cursor": "pointer", "transition": "all 0.2s",
+    }
+    if subscribed:
+        return (
+            "🔔 Daily News: ON",
+            {**_base,
+             "background": f"#{C['green']}22",
+             "color": f"#{C['green']}",
+             "border": f"1px solid #{C['green']}55"},
+        )
+    return (
+        "🔕 Daily News: OFF",
+        {**_base,
+         "background": f"#{C['card2']}",
+         "color": f"#{C['muted']}",
+         "border": f"1px solid {C['border']}"},
+    )
+
+
+@app.callback(
+    Output("daily-news-sub-store", "data"),
+    Input("daily-news-toggle", "n_clicks"),
+    State("daily-news-sub-store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_daily_news_sub(n_clicks: int, current: bool):
+    """Toggle subscription state and persist it so the scheduler can read it."""
+    new_state = not bool(current)
+    _write_news_sub(new_state)
+    return new_state
 
 
 # ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────

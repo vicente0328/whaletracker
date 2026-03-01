@@ -51,12 +51,23 @@ DATA_MODE: str  = os.getenv("DATA_MODE", "mock")   # "mock" | "live"
 CACHE_DIR: Path = Path(__file__).parent.parent / "data"
 
 # Tracked Whales: {display_name: CIK (zero-padded 10 digits)}
+# CIKs sourced from SEC EDGAR data.sec.gov/submissions/CIK{cik}.json
 TRACKED_WHALES: dict[str, str] = {
-    "Berkshire Hathaway":    "0001067983",
-    "Bridgewater Associates":"0001350694",
-    "Appaloosa Management":  "0001056831",
-    "Pershing Square":       "0001336528",
-    "Tiger Global":          "0001167483",
+    # ── Tier 1 — Long-term value / macro ──────────────────────────────────────
+    "Berkshire Hathaway":    "0001067983",  # Warren Buffett — value legend
+    "Bridgewater Associates":"0001350694",  # Ray Dalio — global macro
+    "Viking Global":         "0001112520",  # Andreas Halvorsen — fundamental L/S
+    # ── Tier 2 — Activist / concentrated value ─────────────────────────────────
+    "Pershing Square":       "0001336528",  # Bill Ackman — high-conviction activist
+    "Appaloosa Management":  "0001056831",  # David Tepper — distressed/macro value
+    "Third Point":           "0001040273",  # Dan Loeb — activist + public letters
+    "Elliott Management":    "0001048268",  # Paul Singer — world's top activist
+    # ── Tier 3 — Quant / growth / multi-strategy ──────────────────────────────
+    "Tiger Global":          "0001167483",  # Chase Coleman — tech growth
+    "Coatue Management":     "0001336752",  # Philippe Laffont — tech-focused growth
+    "D.E. Shaw":             "0001009207",  # David Shaw — systematic quant
+    "Two Sigma":             "0001441816",  # Simons/Overdeck — ML-driven systematic
+    "Citadel Advisors":      "0001423298",  # Ken Griffin — multi-strategy behemoth
 }
 
 # Whale Tier classification
@@ -64,19 +75,27 @@ TRACKED_WHALES: dict[str, str] = {
 # Tier 2 — Activist / concentrated value funds
 # Tier 3 — Growth / quant / high-turnover funds
 WHALE_TIERS: dict[str, dict] = {
-    "Berkshire Hathaway":    {"tier": 1, "style": "Value",    "label": "T1 · Value",    "multiplier": 1.5},
-    "Bridgewater Associates":{"tier": 1, "style": "Macro",    "label": "T1 · Macro",    "multiplier": 1.2},
-    "Pershing Square":       {"tier": 2, "style": "Activist", "label": "T2 · Activist", "multiplier": 1.3},
-    "Appaloosa Management":  {"tier": 2, "style": "Value",    "label": "T2 · Value",    "multiplier": 1.1},
-    "Tiger Global":          {"tier": 3, "style": "Growth",   "label": "T3 · Growth",   "multiplier": 1.0},
+    "Berkshire Hathaway":    {"tier": 1, "style": "Value",      "label": "T1 · Value",      "multiplier": 1.5},
+    "Bridgewater Associates":{"tier": 1, "style": "Macro",      "label": "T1 · Macro",      "multiplier": 1.2},
+    "Viking Global":         {"tier": 1, "style": "Value-Growth","label": "T1 · Value-Growth","multiplier": 1.3},
+    "Pershing Square":       {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.3},
+    "Appaloosa Management":  {"tier": 2, "style": "Value",      "label": "T2 · Value",      "multiplier": 1.1},
+    "Third Point":           {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.2},
+    "Elliott Management":    {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.2},
+    "Tiger Global":          {"tier": 3, "style": "Growth",     "label": "T3 · Growth",     "multiplier": 1.0},
+    "Coatue Management":     {"tier": 3, "style": "Tech-Growth", "label": "T3 · Tech",       "multiplier": 1.0},
+    "D.E. Shaw":             {"tier": 3, "style": "Quant",      "label": "T3 · Quant",      "multiplier": 0.9},
+    "Two Sigma":             {"tier": 3, "style": "Quant",      "label": "T3 · Quant",      "multiplier": 0.9},
+    "Citadel Advisors":      {"tier": 3, "style": "Multi-Strat","label": "T3 · Multi-Strat","multiplier": 1.0},
 }
 
 # Tracked N-PORT funds: {display_name: CIK}
 # CIKs verified via data.sec.gov/submissions/CIK{cik}.json
 TRACKED_NPORT_FUNDS: dict[str, str] = {
     "Vanguard 500 Index": "0000102909",
-    "ARK Innovation ETF": "0001697748",
-    "SPDR S&P 500 ETF":   "0000884394",   # SPY trust (State Street)
+    "ARK Innovation ETF":      "0001697748",
+    "SPDR S&P 500 ETF":        "0000884394",   # SPY trust (State Street)
+    "BlackRock iShares IVV":   "0001100663",   # iShares Core S&P 500 ETF (BlackRock)
 }
 
 # ---------------------------------------------------------------------------
@@ -586,16 +605,85 @@ def _load_mock_data() -> dict[str, list[dict[str, Any]]]:
         return json.loads(mock_path.read_text())
 
     return {
+        # ── Tier 1 ────────────────────────────────────────────────────────────
         "Berkshire Hathaway": [
             {"ticker": "AAPL", "company": "Apple Inc.",           "shares": 905_560_000,   "value_usd": 174_300_000_000, "portfolio_pct": 0.48, "signal": "HIGH_CONCENTRATION"},
             {"ticker": "BAC",  "company": "Bank of America",      "shares": 1_032_000_000, "value_usd":  29_500_000_000, "portfolio_pct": 0.09, "signal": "HOLD"},
             {"ticker": "CVX",  "company": "Chevron Corp.",        "shares":   123_120_000, "value_usd":  18_800_000_000, "portfolio_pct": 0.06, "signal": "HIGH_CONCENTRATION"},
             {"ticker": "OXY",  "company": "Occidental Petroleum", "shares":   248_018_128, "value_usd":  14_800_000_000, "portfolio_pct": 0.04, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "KO",   "company": "Coca-Cola Co.",        "shares":   400_000_000, "value_usd":  24_100_000_000, "portfolio_pct": 0.07, "signal": "HOLD"},
+        ],
+        "Bridgewater Associates": [
+            {"ticker": "SPY",  "company": "SPDR S&P 500 ETF",    "shares":  3_200_000, "value_usd": 1_440_000_000, "portfolio_pct": 0.12, "signal": "HOLD"},
+            {"ticker": "GLD",  "company": "SPDR Gold Trust",      "shares":  4_500_000, "value_usd":   900_000_000, "portfolio_pct": 0.08, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "XOM",  "company": "Exxon Mobil Corp.",    "shares":  5_000_000, "value_usd":   550_000_000, "portfolio_pct": 0.05, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "WMT",  "company": "Walmart Inc.",         "shares":  3_100_000, "value_usd":   200_000_000, "portfolio_pct": 0.02, "signal": "NEW_ENTRY"},
+        ],
+        "Viking Global": [
+            {"ticker": "MSFT", "company": "Microsoft Corp.",      "shares":  4_200_000, "value_usd": 1_680_000_000, "portfolio_pct": 0.14, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "GOOGL","company": "Alphabet Inc.",        "shares":  6_800_000, "value_usd": 1_140_000_000, "portfolio_pct": 0.10, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc.",      "shares":  4_500_000, "value_usd":   765_000_000, "portfolio_pct": 0.07, "signal": "NEW_ENTRY"},
+            {"ticker": "UNH",  "company": "UnitedHealth Group",   "shares":  1_200_000, "value_usd":   588_000_000, "portfolio_pct": 0.05, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "LLY",  "company": "Eli Lilly & Co.",      "shares":    680_000, "value_usd":   523_000_000, "portfolio_pct": 0.05, "signal": "AGGRESSIVE_BUY"},
+        ],
+        # ── Tier 2 ────────────────────────────────────────────────────────────
+        "Pershing Square": [
+            {"ticker": "HLT",  "company": "Hilton Worldwide",     "shares":  9_500_000, "value_usd": 1_900_000_000, "portfolio_pct": 0.22, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "CMG",  "company": "Chipotle Mexican Grill","shares":    620_000, "value_usd": 1_400_000_000, "portfolio_pct": 0.16, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "GOOG", "company": "Alphabet Inc. Cl C",   "shares":  4_100_000, "value_usd":   700_000_000, "portfolio_pct": 0.08, "signal": "AGGRESSIVE_BUY"},
         ],
         "Appaloosa Management": [
             {"ticker": "META",  "company": "Meta Platforms",  "shares":   850_000, "value_usd": 430_000_000, "portfolio_pct": 0.07, "signal": "NEW_ENTRY"},
             {"ticker": "GOOGL", "company": "Alphabet Inc.",   "shares":   500_000, "value_usd": 680_000_000, "portfolio_pct": 0.09, "signal": "AGGRESSIVE_BUY"},
             {"ticker": "AMZN",  "company": "Amazon.com Inc.", "shares": 1_200_000, "value_usd": 204_000_000, "portfolio_pct": 0.03, "signal": "HOLD"},
+            {"ticker": "TSLA",  "company": "Tesla Inc.",      "shares":   900_000, "value_usd": 270_000_000, "portfolio_pct": 0.04, "signal": "NEW_ENTRY"},
+        ],
+        "Third Point": [
+            {"ticker": "META",  "company": "Meta Platforms",       "shares": 1_050_000, "value_usd":   535_000_000, "portfolio_pct": 0.12, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "AMZN",  "company": "Amazon.com Inc.",       "shares": 2_800_000, "value_usd":   476_000_000, "portfolio_pct": 0.11, "signal": "NEW_ENTRY"},
+            {"ticker": "MSFT",  "company": "Microsoft Corp.",       "shares": 1_200_000, "value_usd":   480_000_000, "portfolio_pct": 0.11, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "PG",    "company": "Procter & Gamble Co.",  "shares": 2_100_000, "value_usd":   318_000_000, "portfolio_pct": 0.07, "signal": "HOLD"},
+        ],
+        "Elliott Management": [
+            {"ticker": "CRM",  "company": "Salesforce Inc.",       "shares": 11_000_000, "value_usd": 2_200_000_000, "portfolio_pct": 0.18, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "INTC", "company": "Intel Corp.",           "shares": 40_000_000, "value_usd":   760_000_000, "portfolio_pct": 0.06, "signal": "NEW_ENTRY"},
+            {"ticker": "HPE",  "company": "Hewlett Packard Enter.","shares": 45_000_000, "value_usd":   855_000_000, "portfolio_pct": 0.07, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "WDC",  "company": "Western Digital Corp.", "shares": 12_000_000, "value_usd":   816_000_000, "portfolio_pct": 0.07, "signal": "AGGRESSIVE_BUY"},
+        ],
+        # ── Tier 3 ────────────────────────────────────────────────────────────
+        "Tiger Global": [
+            {"ticker": "MSFT", "company": "Microsoft Corp.",       "shares":  2_900_000, "value_usd": 1_160_000_000, "portfolio_pct": 0.11, "signal": "HOLD"},
+            {"ticker": "NVDA", "company": "Nvidia Corp.",          "shares":  3_500_000, "value_usd": 1_523_000_000, "portfolio_pct": 0.15, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "SNOW", "company": "Snowflake Inc.",        "shares":  7_800_000, "value_usd":   858_000_000, "portfolio_pct": 0.08, "signal": "NEW_ENTRY"},
+            {"ticker": "PLTR", "company": "Palantir Technologies", "shares": 14_000_000, "value_usd":   434_000_000, "portfolio_pct": 0.04, "signal": "NEW_ENTRY"},
+        ],
+        "Coatue Management": [
+            {"ticker": "NVDA", "company": "Nvidia Corp.",          "shares":  8_200_000, "value_usd": 3_567_000_000, "portfolio_pct": 0.21, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "MSFT", "company": "Microsoft Corp.",       "shares":  3_800_000, "value_usd": 1_520_000_000, "portfolio_pct": 0.09, "signal": "HOLD"},
+            {"ticker": "NOW",  "company": "ServiceNow Inc.",       "shares":  1_450_000, "value_usd": 1_015_000_000, "portfolio_pct": 0.06, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "META", "company": "Meta Platforms",        "shares":  1_300_000, "value_usd":   663_000_000, "portfolio_pct": 0.04, "signal": "NEW_ENTRY"},
+            {"ticker": "DDOG", "company": "Datadog Inc.",          "shares":  3_600_000, "value_usd":   432_000_000, "portfolio_pct": 0.03, "signal": "HOLD"},
+        ],
+        "D.E. Shaw": [
+            {"ticker": "AAPL", "company": "Apple Inc.",            "shares":  6_800_000, "value_usd": 1_309_000_000, "portfolio_pct": 0.07, "signal": "HOLD"},
+            {"ticker": "MSFT", "company": "Microsoft Corp.",       "shares":  4_200_000, "value_usd": 1_680_000_000, "portfolio_pct": 0.09, "signal": "HOLD"},
+            {"ticker": "NVDA", "company": "Nvidia Corp.",          "shares":  5_100_000, "value_usd": 2_219_000_000, "portfolio_pct": 0.12, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc.",       "shares":  5_900_000, "value_usd": 1_003_000_000, "portfolio_pct": 0.05, "signal": "HOLD"},
+            {"ticker": "GOOGL","company": "Alphabet Inc.",         "shares":  4_400_000, "value_usd":   739_000_000, "portfolio_pct": 0.04, "signal": "HOLD"},
+        ],
+        "Two Sigma": [
+            {"ticker": "NVDA", "company": "Nvidia Corp.",          "shares":  4_600_000, "value_usd": 2_001_000_000, "portfolio_pct": 0.11, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "AAPL", "company": "Apple Inc.",            "shares":  5_300_000, "value_usd": 1_020_000_000, "portfolio_pct": 0.06, "signal": "HOLD"},
+            {"ticker": "MSFT", "company": "Microsoft Corp.",       "shares":  3_100_000, "value_usd": 1_240_000_000, "portfolio_pct": 0.07, "signal": "HOLD"},
+            {"ticker": "META", "company": "Meta Platforms",        "shares":  2_200_000, "value_usd": 1_122_000_000, "portfolio_pct": 0.06, "signal": "HOLD"},
+            {"ticker": "AMD",  "company": "Advanced Micro Devices","shares":  4_900_000, "value_usd":   612_000_000, "portfolio_pct": 0.03, "signal": "NEW_ENTRY"},
+        ],
+        "Citadel Advisors": [
+            {"ticker": "NVDA", "company": "Nvidia Corp.",          "shares": 15_400_000, "value_usd": 6_700_000_000, "portfolio_pct": 0.10, "signal": "HIGH_CONCENTRATION"},
+            {"ticker": "MSFT", "company": "Microsoft Corp.",       "shares":  8_900_000, "value_usd": 3_560_000_000, "portfolio_pct": 0.05, "signal": "HOLD"},
+            {"ticker": "AAPL", "company": "Apple Inc.",            "shares": 12_000_000, "value_usd": 2_311_000_000, "portfolio_pct": 0.03, "signal": "HOLD"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc.",       "shares":  9_800_000, "value_usd": 1_666_000_000, "portfolio_pct": 0.02, "signal": "AGGRESSIVE_BUY"},
+            {"ticker": "META", "company": "Meta Platforms",        "shares":  3_600_000, "value_usd": 1_836_000_000, "portfolio_pct": 0.03, "signal": "NEW_ENTRY"},
         ],
     }
 
@@ -1128,5 +1216,19 @@ def _mock_nport() -> dict[str, list[dict[str, Any]]]:
             {"ticker": "TSLA", "company": "Tesla Inc.",     "shares": 3_200_000, "value_usd":  819_200_000, "portfolio_pct": 0.112, "change_pct":  0.18, "signal": "FUND_ACCUMULATION"},
             {"ticker": "COIN", "company": "Coinbase Global","shares": 2_100_000, "value_usd":  504_000_000, "portfolio_pct": 0.073, "change_pct":  0.31, "signal": "FUND_ACCUMULATION"},
             {"ticker": "GOOGL","company": "Alphabet Inc.",  "shares":   850_000, "value_usd":  148_100_000, "portfolio_pct": 0.021, "change_pct": -0.12, "signal": "FUND_LIQUIDATION"},
+        ],
+        # BlackRock iShares Core S&P 500 ETF (IVV) — ~$500B AUM, passive index
+        # change_pct reflects monthly rebalancing driven by index weight shifts
+        "BlackRock iShares IVV": [
+            {"ticker": "AAPL", "company": "Apple Inc.",           "shares": 152_000_000, "value_usd": 29_260_000_000, "portfolio_pct": 0.071, "change_pct":  0.06, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "MSFT", "company": "Microsoft Corp.",       "shares": 118_000_000, "value_usd": 47_200_000_000, "portfolio_pct": 0.069, "change_pct":  0.03, "signal": "HOLD"},
+            {"ticker": "NVDA", "company": "Nvidia Corp.",          "shares": 116_000_000, "value_usd": 50_460_000_000, "portfolio_pct": 0.061, "change_pct":  0.28, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "AMZN", "company": "Amazon.com Inc.",       "shares":  72_000_000, "value_usd": 15_624_000_000, "portfolio_pct": 0.038, "change_pct":  0.07, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "META", "company": "Meta Platforms",        "shares":  28_500_000, "value_usd": 14_549_000_000, "portfolio_pct": 0.027, "change_pct":  0.11, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "GOOGL","company": "Alphabet Inc. Cl A",    "shares":  84_000_000, "value_usd": 14_112_000_000, "portfolio_pct": 0.023, "change_pct": -0.02, "signal": "HOLD"},
+            {"ticker": "BRK-B","company": "Berkshire Hathaway B",  "shares":  27_000_000, "value_usd":  9_801_000_000, "portfolio_pct": 0.017, "change_pct":  0.01, "signal": "HOLD"},
+            {"ticker": "LLY",  "company": "Eli Lilly & Co.",       "shares":  12_400_000, "value_usd":  9_548_000_000, "portfolio_pct": 0.016, "change_pct":  0.09, "signal": "FUND_ACCUMULATION"},
+            {"ticker": "AVGO", "company": "Broadcom Inc.",          "shares":   5_800_000, "value_usd":  9_048_000_000, "portfolio_pct": 0.015, "change_pct": -0.08, "signal": "FUND_LIQUIDATION"},
+            {"ticker": "JPM",  "company": "JPMorgan Chase & Co.",  "shares":  30_200_000, "value_usd":  7_398_000_000, "portfolio_pct": 0.014, "change_pct":  0.02, "signal": "HOLD"},
         ],
     }

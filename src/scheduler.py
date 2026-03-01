@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 REFRESH_INTERVAL_HOURS  = int(os.getenv("REFRESH_INTERVAL_HOURS", "4"))
 DAILY_DIGEST_HOUR       = int(os.getenv("DAILY_DIGEST_HOUR", "8"))
+DAILY_NEWS_HOUR         = int(os.getenv("DAILY_NEWS_HOUR", "8"))   # UTC hour for morning news alert
+EVENT_CHECK_HOUR        = int(os.getenv("EVENT_CHECK_HOUR", "7"))  # UTC hour for market event pre-alerts
 ALERT_MIN_SCORE         = int(os.getenv("ALERT_MIN_SCORE", "2"))
 FORM4_REFRESH_MINUTES   = int(os.getenv("FORM4_REFRESH_MINUTES", "30"))
 
@@ -101,6 +103,26 @@ def start(app_data: dict[str, Any]) -> None:
         id="daily_digest",
         replace_existing=True,
         kwargs={"app_data": app_data},
+    )
+
+    # ── Daily news alert job ────────────────────────────────────────────────
+    _scheduler.add_job(
+        _daily_news_job,
+        trigger="cron",
+        hour=DAILY_NEWS_HOUR,
+        minute=10,          # 10 min after the hour so it doesn't clash with digest
+        id="daily_news",
+        replace_existing=True,
+    )
+
+    # ── Market event pre-alert job ──────────────────────────────────────────
+    _scheduler.add_job(
+        _market_event_job,
+        trigger="cron",
+        hour=EVENT_CHECK_HOUR,
+        minute=20,
+        id="market_events",
+        replace_existing=True,
     )
 
     # ── Real-time Form 4 polling (runs more frequently than full refresh) ───
@@ -256,6 +278,85 @@ def _realtime_form4_job() -> None:
             logger.error("[scheduler] Form 4 alert send failed (%s): %s", ticker, exc)
 
     logger.info("[scheduler] Form 4 poll complete — %d new alerts", new_alerts)
+
+
+def _is_news_sub_enabled() -> bool:
+    """Return True if the user has enabled the Daily News Slack subscription."""
+    import json  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    sub_file = Path(__file__).parent.parent / "daily_news_sub.json"
+    try:
+        if sub_file.exists():
+            data = json.loads(sub_file.read_text())
+            return bool(data.get("enabled", False))
+    except Exception:
+        pass
+    return False
+
+
+def _daily_news_job() -> None:
+    """Send the day's top financial news headline to Slack if subscription is ON."""
+    if not _is_news_sub_enabled():
+        logger.info("[scheduler] Daily news subscription disabled — skipping")
+        return
+
+    try:
+        from src.news_collector import fetch_market_news      # noqa: PLC0415
+        from src.slack_notifier import send_daily_news_alert  # noqa: PLC0415
+    except Exception as exc:
+        logger.error("[scheduler] Daily news import error: %s", exc)
+        return
+
+    try:
+        news = fetch_market_news(1)
+        if news:
+            send_daily_news_alert(news[0])
+            logger.info(
+                "[scheduler] Daily news sent: %s",
+                news[0].get("headline", "")[:60],
+            )
+        else:
+            logger.info("[scheduler] No news available — daily news skipped")
+    except Exception as exc:
+        logger.error("[scheduler] Daily news job error: %s", exc)
+
+
+def _market_event_job() -> None:
+    """Check whether any scheduled market event needs a pre-alert today.
+
+    Fires send_market_event_alert() for every event whose date is exactly
+    EVENT_ALERT_DAYS_BEFORE days away (default: 7 days and 1 day before).
+    """
+    try:
+        from src.market_events import get_events_due_for_alert        # noqa: PLC0415
+        from src.slack_notifier import send_market_event_alert        # noqa: PLC0415
+    except Exception as exc:
+        logger.error("[scheduler] Market events import error: %s", exc)
+        return
+
+    try:
+        due = get_events_due_for_alert()
+    except Exception as exc:
+        logger.error("[scheduler] Market events check error: %s", exc)
+        return
+
+    if not due:
+        logger.info("[scheduler] No market event alerts due today")
+        return
+
+    for event, days_before in due:
+        try:
+            send_market_event_alert(event, days_before)
+            logger.info(
+                "[scheduler] Market event alert sent: %s (%d days before)",
+                event.get("title", ""), days_before,
+            )
+        except Exception as exc:
+            logger.error(
+                "[scheduler] Market event alert failed (%s): %s",
+                event.get("title", ""), exc,
+            )
 
 
 def _daily_digest_job(app_data: dict[str, Any]) -> None:
