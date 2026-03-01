@@ -6,8 +6,11 @@ Production:   gunicorn app:server --bind 0.0.0.0:$PORT
 """
 
 import json
+import logging
 import os
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from dash import Dash, html, dcc, Input, Output, State, ctx, ALL, no_update
 import plotly.graph_objects as go
@@ -3407,7 +3410,7 @@ def render_editor_holdings(store_data):
                             title="Edit",
                             style={
                                 "background": "transparent", "border": "none",
-                                "color": f"#{C['accent']}", "cursor": "pointer",
+                                "color": f"#{C['blue']}", "cursor": "pointer",
                                 "fontSize": "0.9rem", "padding": "0 4px",
                             }),
                 html.Button("✕", id={"type": "holding-del-btn", "index": i}, n_clicks=0,
