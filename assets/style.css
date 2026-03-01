@@ -455,6 +455,14 @@ details[open] .expander-summary { border-radius: 10px 10px 0 0; }
 }
 .guide-notes li { margin-bottom: 2px; }
 
+/* ── Plotly — disable touch zoom globally ── */
+.js-plotly-plot .nsewdrag,
+.js-plotly-plot .nwdrag,
+.js-plotly-plot .nedrag,
+.js-plotly-plot .swdrag,
+.js-plotly-plot .sedrag { touch-action: none !important; }
+.plotly-graph-div { touch-action: pan-y !important; }
+
 /* ── Responsive — Tablet (≤ 900px) ── */
 @media (max-width: 900px) {
     .app-shell  { padding: 1rem; }
@@ -463,58 +471,74 @@ details[open] .expander-summary { border-radius: 10px 10px 0 0; }
     .grid-4     { grid-template-columns: repeat(2, 1fr); }
     .grid-3     { grid-template-columns: repeat(2, 1fr); }
     .charts-row { grid-template-columns: 1fr; }
+
+    /* Plotly charts don't overflow card width */
+    .js-plotly-plot, .plotly-graph-div { max-width: 100% !important; }
 }
 
 /* ── Responsive — Phone (≤ 620px) ── */
 @media (max-width: 620px) {
     .app-shell { padding: 0.75rem; }
 
-    /* Header: wrap so controls don't crush logo */
-    .header        { flex-wrap: wrap; gap: 8px; padding-bottom: 0.9rem; }
-    .header-left   { flex: 1; min-width: 0; }
-    .header-right  { gap: 8px; flex-shrink: 0; }
-    .logo-title    { font-size: 1.2rem; }
-    .logo-emoji    { font-size: 1.65rem; }
-    .logo-sub      { font-size: 0.62rem; }
-    .timestamp     { font-size: 0.67rem; }
-    .guide-btn     { padding: 7px 11px; font-size: 0.75rem; min-height: 38px; }
+    /* Header: logo on top row, controls on second row */
+    .header       { flex-wrap: wrap; gap: 6px; padding-bottom: 0.8rem; }
+    .header-left  { flex: 1 1 100%; min-width: 0; }
+    .header-right {
+        flex: 1 1 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: nowrap;
+    }
+    .logo-title  { font-size: 1.15rem; }
+    .logo-emoji  { font-size: 1.55rem; }
+    .logo-sub    { font-size: 0.6rem; }
+    /* Hide timestamp — reclaim space for login button */
+    .timestamp   { display: none; }
+    /* Login / user badge always visible */
+    #auth-header-section { margin-left: auto; flex-shrink: 0; }
+    .guide-btn   { padding: 8px 12px; font-size: 0.76rem; min-height: 38px; min-width: 80px; }
 
     /* KPI strip */
-    .kpi-strip { gap: 0.55rem; }
-    .kpi-card  { padding: 0.85rem 0.95rem; }
-    .kpi-value { font-size: 1.2rem; }
-    .kpi-label { font-size: 0.56rem; }
-    .kpi-sub   { font-size: 0.62rem; }
+    .kpi-strip { gap: 0.5rem; }
+    .kpi-card  { padding: 0.8rem 0.9rem; }
+    .kpi-value { font-size: 1.15rem; }
+    .kpi-label { font-size: 0.55rem; }
+    .kpi-sub   { font-size: 0.61rem; }
 
-    /* Tabs: scroll horizontally instead of overflowing viewport */
+    /* Tabs: horizontal scroll, no overflow */
     .main-tabs {
+        display: flex !important;
         max-width: 100% !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
         scrollbar-width: none !important;
+        width: 100% !important;
     }
     .main-tabs::-webkit-scrollbar { display: none !important; }
     .tab {
         flex-shrink: 0 !important;
         white-space: nowrap !important;
-        padding: 9px 13px !important;
-        font-size: 0.78rem !important;
+        padding: 9px 12px !important;
+        font-size: 0.76rem !important;
         min-height: 38px !important;
     }
 
     /* Grids */
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
     .grid-3 { grid-template-columns: 1fr; }
 
     /* Holding cards */
     .holding-card   { padding: 0.75rem; }
-    .holding-ticker { font-size: 0.95rem; }
+    .holding-ticker { font-size: 0.92rem; }
 
     /* Whale section headers */
     .whale-header { flex-wrap: wrap; gap: 6px; }
 
     /* Recommendation cards */
     .rec-card       { padding: 0.85rem 0.9rem; }
-    .rec-ticker     { font-size: 1.2rem; }
+    .rec-ticker     { font-size: 1.15rem; }
     .rec-filter-row { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
     .rec-count      { text-align: left; }
     .rec-filter label { min-height: 34px; display: inline-flex; align-items: center; }
@@ -529,24 +553,38 @@ details[open] .expander-summary { border-radius: 10px 10px 0 0; }
     /* Charts row */
     .charts-row { grid-template-columns: 1fr; }
 
+    /* Plotly — full width, no overflow */
+    .js-plotly-plot, .plotly-graph-div { max-width: 100% !important; overflow: hidden; }
+
     /* Guide modal */
-    .modal-overlay { padding: 0.6rem; }
-    .modal-box     { max-height: 94vh; border-radius: 14px; }
+    .modal-overlay { padding: 0.5rem; }
+    .modal-box     { max-height: 95vh; border-radius: 14px; }
     .modal-header  { padding: 0.85rem 1rem; }
     .modal-close   { width: 38px; height: 38px; }
     .guide-scroll  { padding: 0.9rem 1rem 1.2rem; }
     .lang-tabs     { padding: 6px 1rem !important; }
+
+    /* Sector context: stack cards vertically */
+    .sector-context-cards { flex-direction: column !important; }
+
+    /* Activist battlefield: stack left + timeline vertically */
+    .activist-row { flex-direction: column !important; gap: 10px !important; }
+    .activist-meta { min-width: unset !important; margin-right: 0 !important; }
 }
 
 /* ── Responsive — Small Phone (≤ 420px) ── */
 @media (max-width: 420px) {
-    .app-shell  { padding: 0.55rem; }
-    .kpi-strip  { gap: 0.45rem; }
-    .kpi-card   { padding: 0.75rem 0.8rem; }
-    .kpi-value  { font-size: 1.1rem; }
-    .logo-title { font-size: 1.05rem; }
+    .app-shell  { padding: 0.5rem; }
+    .kpi-strip  { gap: 0.4rem; }
+    .kpi-card   { padding: 0.7rem 0.75rem; }
+    .kpi-value  { font-size: 1.05rem; }
+    .kpi-label  { font-size: 0.52rem; }
+    .logo-title { font-size: 1rem; }
+    .logo-emoji { font-size: 1.4rem; }
     .grid-4     { grid-template-columns: 1fr; }
     .tab        { padding: 8px 10px !important; font-size: 0.72rem !important; }
     .rec-header { flex-wrap: wrap; gap: 6px; }
-    .rec-ticker { font-size: 1.05rem; }
+    .rec-ticker { font-size: 1rem; }
+    /* Auth button compact */
+    .guide-btn  { padding: 7px 10px; font-size: 0.72rem; min-width: 70px; }
 }

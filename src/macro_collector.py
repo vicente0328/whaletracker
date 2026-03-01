@@ -139,18 +139,18 @@ def _fetch_from_fred() -> dict[str, dict]:
 
     for key, meta in _SERIES.items():
         try:
-            resp = requests.get(
-                _BASE_URL,
-                params={
-                    "series_id":  meta["id"],
-                    "api_key":    _API_KEY,
-                    "file_type":  "json",
-                    "sort_order": "desc",
-                    "limit":      60,
-                    "observation_start": start_date,
-                },
-                timeout=12,
-            )
+            params = {
+                "series_id":  meta["id"],
+                "api_key":    _API_KEY,
+                "file_type":  "json",
+                "sort_order": "desc",
+                "limit":      60,
+            }
+            # PMI series have limited FRED history — skip date filter so we
+            # get whatever observations exist (falls back to mock if none)
+            if not meta.get("pmi"):
+                params["observation_start"] = start_date
+            resp = requests.get(_BASE_URL, params=params, timeout=12)
             resp.raise_for_status()
             raw_obs = resp.json().get("observations", [])
 
@@ -233,11 +233,12 @@ def _mock_macro() -> dict[str, dict]:
                 year -= 1
         return obs
 
-    # Latest ≈ Jan 2026, 24 monthly points
+    # Latest ≈ Jan 2026, 24 monthly points (newest first)
+    # Fed cut 3×25bps in Sep/Nov/Dec 2024 → 4.25-4.50%; continued cuts through 2025
     fed_vals = [
-        5.33, 5.33, 5.33, 5.33, 5.33, 5.25, 5.25, 5.08,
-        4.83, 4.58, 4.33, 4.33, 4.33, 4.33, 4.33, 4.33,
-        4.33, 4.33, 4.08, 3.83, 3.08, 2.33, 1.58, 0.83,
+        3.83, 3.83, 3.83, 3.83, 3.83, 4.08, 4.08, 4.08,
+        4.33, 4.33, 4.33, 4.58, 4.58, 4.58, 4.83, 4.83,
+        5.08, 5.33, 5.33, 5.33, 5.33, 5.33, 5.33, 5.33,
     ]
     cpi_vals = [
         2.9, 2.7, 2.6, 2.5, 2.4, 2.5, 2.6, 2.9,

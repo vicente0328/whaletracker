@@ -126,6 +126,7 @@ def plotly_base(**kwargs) -> dict:
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Inter, sans-serif", color=f"#{C['text']}"),
         margin=dict(l=0, r=0, t=36, b=0),
+        dragmode=False,
     )
     base.update(kwargs)
     return base
@@ -269,7 +270,8 @@ def build_sector_context(rotation: dict) -> html.Div:
                  style={"fontSize": "0.72rem", "fontWeight": "700",
                         "color": f"#{C['blue']}", "letterSpacing": "0.5px",
                         "textTransform": "uppercase", "marginBottom": "0.6rem"}),
-        html.Div(cards, style={"display": "flex", "gap": "0.8rem", "flexWrap": "wrap"}),
+        html.Div(cards, className="sector-context-cards",
+                 style={"display": "flex", "gap": "0.8rem", "flexWrap": "wrap"}),
     ], style={
         "background": f"#{C['card']}", "borderRadius": "12px",
         "padding": "14px 16px", "border": f"1px solid #{C['border']}",
@@ -357,13 +359,13 @@ def build_activist_battlefield(activist_data: dict) -> html.Div:
                             style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
                                    "marginTop": "4px", "fontStyle": "italic"})]
                   if latest_headline else []),
-            ], style={"minWidth": "160px", "marginRight": "16px"}),
+            ], className="activist-meta", style={"minWidth": "160px", "marginRight": "16px"}),
             # Right: phase bar
             html.Div(phase_steps, style={
                 "display": "flex", "alignItems": "flex-start",
                 "flex": "1", "paddingTop": "4px",
             }),
-        ], style={
+        ], className="activist-row", style={
             "display": "flex", "alignItems": "flex-start",
             "background": f"#{C['card2']}", "borderRadius": "10px",
             "padding": "12px 16px", "border": f"1px solid #{C['border']}",
@@ -555,7 +557,7 @@ def build_whale_tab():
             yaxis=dict(showgrid=False, tickfont=dict(size=11), autorange="reversed"),
             bargap=0.4,
         ))
-        sections.append(dcc.Graph(figure=fig, config={"displayModeBar": False},
+        sections.append(dcc.Graph(figure=fig, config={"displayModeBar": False, "scrollZoom": False},
                                   style={"marginBottom": "0.5rem"}))
         sections.append(build_sector_context(rotation))
 
@@ -877,7 +879,7 @@ def build_macro_tab():
                            zeroline=False),
                 margin=dict(l=0, r=0, t=36, b=40),
             ))
-            row_charts.append(dcc.Graph(figure=fig, config={"displayModeBar": False},
+            row_charts.append(dcc.Graph(figure=fig, config={"displayModeBar": False, "scrollZoom": False},
                                         style={"flex": "1"}))
         chart_rows.append(html.Div(row_charts, style={
             "display": "flex", "gap": "1rem", "marginBottom": "1rem",
@@ -907,7 +909,7 @@ def build_macro_tab():
             margin=dict(l=0, r=0, t=36, b=40),
             bargap=0.3,
         ))
-        chart_rows.append(dcc.Graph(figure=fig_gdp, config={"displayModeBar": False},
+        chart_rows.append(dcc.Graph(figure=fig_gdp, config={"displayModeBar": False, "scrollZoom": False},
                                     style={"marginBottom": "1rem"}))
 
     # PMI charts side-by-side with 50 expansion/contraction line
@@ -946,7 +948,7 @@ def build_macro_tab():
                        tickfont=dict(size=10), range=[40, 65], zeroline=False),
             margin=dict(l=0, r=0, t=36, b=40),
         ))
-        pmi_charts.append(dcc.Graph(figure=fig_pmi, config={"displayModeBar": False},
+        pmi_charts.append(dcc.Graph(figure=fig_pmi, config={"displayModeBar": False, "scrollZoom": False},
                                     style={"flex": "1"}))
     if pmi_charts:
         chart_rows.append(html.Div(pmi_charts, style={
@@ -1356,8 +1358,8 @@ def _build_portfolio_analysis(port_data: dict):
     ))
 
     charts_row = html.Div([
-        dcc.Graph(figure=fig_donut, config={"displayModeBar": False}),
-        dcc.Graph(figure=fig_bar,   config={"displayModeBar": False}),
+        dcc.Graph(figure=fig_donut, config={"displayModeBar": False, "scrollZoom": False}),
+        dcc.Graph(figure=fig_bar,   config={"displayModeBar": False, "scrollZoom": False}),
     ], className="charts-row")
 
     # Rebalancing cards
