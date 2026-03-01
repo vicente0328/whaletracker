@@ -1324,7 +1324,7 @@ def build_portfolio_tab(auth_data=None):
                                  "width": "190px", "fontSize": "0.78rem",
                                  "background": f"#{C['card2']}", "color": "#000",
                              }),
-                html.Button("＋ Add", id="holding-add-btn", n_clicks=0, style={
+                html.Button("＋ Add / Update", id="holding-add-btn", n_clicks=0, style={
                     "background": f"#{C['green']}22", "color": f"#{C['green']}",
                     "border": f"1px solid #{C['green']}44", "borderRadius": "6px",
                     "padding": "5px 14px", "fontSize": "0.75rem", "fontWeight": "700",
@@ -3398,15 +3398,22 @@ def render_editor_holdings(store_data):
             price_cell,
             mv_cell,
             pnl_cell,
-            html.Td(
+            html.Td([
+                html.Button("✎", id={"type": "holding-edit-btn", "index": i}, n_clicks=0,
+                            title="Edit",
+                            style={
+                                "background": "transparent", "border": "none",
+                                "color": f"#{C['accent']}", "cursor": "pointer",
+                                "fontSize": "0.9rem", "padding": "0 4px",
+                            }),
                 html.Button("✕", id={"type": "holding-del-btn", "index": i}, n_clicks=0,
+                            title="Delete",
                             style={
                                 "background": "transparent", "border": "none",
                                 "color": f"#{C['red']}", "cursor": "pointer",
                                 "fontSize": "0.95rem", "padding": "0 4px",
                             }),
-                style={"textAlign": "center", "padding": "4px"},
-            ),
+            ], style={"textAlign": "center", "padding": "4px", "whiteSpace": "nowrap"}),
         ], style={"borderBottom": f"1px solid #{C['border']}20"}))
 
     return html.Table([
@@ -3430,12 +3437,12 @@ def render_editor_holdings(store_data):
     prevent_initial_call=True,
 )
 def autofill_sector(ticker: str | None):
-    """When a ticker is selected in the dropdown, auto-populate the sector field."""
+    """When a ticker is selected/changed, auto-populate (or clear) the sector field."""
     from src.market_data import fetch_sector as _fetch_sector  # noqa: PLC0415
     if not ticker:
-        return no_update
+        return None
     sector = _fetch_sector(ticker.strip().upper())
-    return sector if sector else no_update
+    return sector  # None clears old sector when new ticker has no data
 
 
 @app.callback(
@@ -3443,6 +3450,7 @@ def autofill_sector(ticker: str | None):
     Output("h-ticker",             "value"),
     Output("h-qty",                "value"),
     Output("h-cost",               "value"),
+    Output("h-sector",             "value", allow_duplicate=True),
     Input("holding-add-btn",       "n_clicks"),
     State("h-ticker",              "value"),
     State("h-qty",                 "value"),
@@ -3455,20 +3463,20 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
     from src.market_data import fetch_sector as _fetch_sector  # noqa: PLC0415
 
     if not n_clicks:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
 
     ticker = (ticker or "").strip().upper()
     if not ticker:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
 
     try:
         qty_f  = float(qty  or 0)
         cost_f = float(cost or 0)
     except (ValueError, TypeError):
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
 
     if qty_f <= 0 or cost_f <= 0:
-        return no_update, no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update
 
     # Auto-detect sector if not provided by user
     resolved_sector = sector or _fetch_sector(ticker) or "Other"
@@ -3483,7 +3491,7 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
             h["avg_cost"]  = cost_f
             h["sector"]    = resolved_sector
             current["holdings"] = holdings
-            return current, None, None, None
+            return current, None, None, None, None
 
     holdings.append({
         "ticker":   ticker,
@@ -3492,7 +3500,32 @@ def add_holding(n_clicks, ticker, qty, cost, sector, store_data):
         "sector":   resolved_sector,
     })
     current["holdings"] = holdings
-    return current, None, None, None
+    return current, None, None, None, None
+
+
+@app.callback(
+    Output("h-ticker", "value", allow_duplicate=True),
+    Output("h-qty",    "value", allow_duplicate=True),
+    Output("h-cost",   "value", allow_duplicate=True),
+    Output("h-sector", "value", allow_duplicate=True),
+    Input({"type": "holding-edit-btn", "index": ALL}, "n_clicks"),
+    State("portfolio-edit-store", "data"),
+    prevent_initial_call=True,
+)
+def load_holding_for_edit(n_clicks_list, store_data):
+    """Load a holding's data into the add-form so the user can edit and re-save."""
+    if not any(n_clicks_list):
+        return no_update, no_update, no_update, no_update
+    # Find which button was clicked
+    triggered = ctx.triggered_id
+    if not triggered or not isinstance(triggered, dict):
+        return no_update, no_update, no_update, no_update
+    idx = triggered.get("index")
+    holdings = (store_data or {}).get("holdings", [])
+    if idx is None or idx >= len(holdings):
+        return no_update, no_update, no_update, no_update
+    h = holdings[idx]
+    return h["ticker"], h.get("quantity"), h.get("avg_cost"), h.get("sector")
 
 
 @app.callback(
