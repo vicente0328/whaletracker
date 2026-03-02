@@ -49,7 +49,8 @@ _FMP_BASE = "https://financialmodelingprep.com/stable"
 
 _ROOT           = Path(__file__).parent.parent
 _SIGNALS_FILE   = _ROOT / "data" / "historical_signals.json"
-_PRICE_CACHE: dict[str, dict[str, pd.Series]] = {}   # (from, to) → {ticker: Series}
+_PRICE_CACHE:       dict[str, dict[str, pd.Series]] = {}   # FMP cache
+_YAHOO_PRICE_CACHE: dict[str, dict[str, pd.Series]] = {}   # Yahoo cache
 
 STRONG_BUY_MIN_SCORE = 7    # raised from 6 — matches new precompute threshold
 BUY_MIN_SCORE        = 3
@@ -144,6 +145,7 @@ def _fetch_prices_fmp(
     if not missing:
         return {t: cache[t] for t in tickers}
 
+    consecutive_failures = 0
     for ticker in missing:
         sym = ticker.upper()
         try:
@@ -153,6 +155,17 @@ def _fetch_prices_fmp(
                         "apikey": _FMP_KEY},
                 timeout=30,
             )
+            if r.status_code == 429:
+                consecutive_failures += 1
+                logger.warning("[backtester] FMP price fetch failed (%s): HTTP 429", sym)
+                if consecutive_failures >= 3:
+                    logger.warning(
+                        "[backtester] FMP returning 429 consistently — "
+                        "skipping remaining FMP requests (plan limit)."
+                    )
+                    break
+                time.sleep(0.25)
+                continue
             r.raise_for_status()
             rows = r.json()           # list of {symbol, date, price, volume}
             if isinstance(rows, list) and rows:
@@ -160,11 +173,83 @@ def _fetch_prices_fmp(
                     {row["date"]: float(row["price"]) for row in rows},
                     dtype=float,
                 ).sort_index()
+            consecutive_failures = 0
         except Exception as exc:
             logger.warning("[backtester] FMP price fetch failed (%s): %s", sym, exc)
         time.sleep(0.25)
 
     return {t: cache[t] for t in tickers if t in cache}
+
+
+def _fetch_prices_yahoo(
+    tickers:   list[str],
+    from_date: str,
+    to_date:   str,
+) -> dict[str, pd.Series]:
+    """Fetch daily adj-close prices from Yahoo Finance (free, no API key).
+
+    Returns {TICKER: pd.Series(date_str → adj_close)}, sorted ascending.
+    Used as a fallback when FMP is unavailable or returns no data.
+    """
+    cache_key = (from_date, to_date)
+    if cache_key not in _YAHOO_PRICE_CACHE:
+        _YAHOO_PRICE_CACHE[cache_key] = {}
+    cache = _YAHOO_PRICE_CACHE[cache_key]
+
+    missing = [t for t in tickers if t.upper() not in cache]
+    if not missing:
+        return {t.upper(): cache[t.upper()] for t in tickers if t.upper() in cache}
+
+    try:
+        period1 = int(datetime.strptime(from_date, "%Y-%m-%d").timestamp())
+        period2 = int(datetime.strptime(to_date,   "%Y-%m-%d").timestamp()) + 86400
+    except Exception:
+        period1 = period2 = None
+
+    for ticker in missing:
+        sym = ticker.upper()
+        params: dict[str, Any] = {"interval": "1d"}
+        if period1 and period2:
+            params["period1"] = period1
+            params["period2"] = period2
+        else:
+            params["range"] = "5y"
+        try:
+            r = requests.get(
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",
+                params=params,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=30,
+            )
+            if not r.ok:
+                logger.warning("[backtester] Yahoo price fetch failed (%s): HTTP %s", sym, r.status_code)
+                continue
+            res_list = r.json().get("chart", {}).get("result", [])
+            if not res_list:
+                logger.warning("[backtester] Yahoo: empty result for %s", sym)
+                continue
+            res = res_list[0]
+            timestamps = res.get("timestamp", [])
+            adj_closes = (
+                res.get("indicators", {})
+                   .get("adjclose", [{}])[0]
+                   .get("adjclose", [])
+            )
+            if not timestamps or not adj_closes:
+                continue
+            prices_dict = {
+                datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d"): float(cl)
+                for ts, cl in zip(timestamps, adj_closes)
+                if cl is not None
+            }
+            if prices_dict:
+                cache[sym] = pd.Series(prices_dict, dtype=float).sort_index()
+                logger.debug("[backtester] Yahoo: %d days for %s", len(cache[sym]), sym)
+        except Exception as exc:
+            logger.warning("[backtester] Yahoo price error (%s): %s", sym, exc)
+        time.sleep(0.1)
+
+    return {t.upper(): cache[t.upper()] for t in tickers if t.upper() in cache}
 
 
 def _price_on(prices: dict[str, pd.Series], ticker: str, date_str: str) -> float | None:
@@ -241,12 +326,22 @@ def run_backtest(
     logger.info("[backtester] Fetching prices for %d tickers (%s → %s) …",
                 len(all_tickers), from_str, to_str)
 
-    # ── 4. Fetch historical prices ────────────────────────────────────────────
+    # ── 4. Fetch historical prices (FMP → Yahoo Finance fallback) ─────────────
     all_prices = _fetch_prices_fmp(sorted(all_tickers), from_str, to_str)
+
+    # Fall back to Yahoo Finance for any tickers missing from FMP
+    missing_from_fmp = sorted(t for t in all_tickers if t not in all_prices)
+    if missing_from_fmp:
+        logger.info(
+            "[backtester] FMP missing %d tickers — fetching from Yahoo Finance: %s",
+            len(missing_from_fmp), missing_from_fmp[:5],
+        )
+        yahoo = _fetch_prices_yahoo(missing_from_fmp, from_str, to_str)
+        all_prices.update(yahoo)
 
     spy_series = all_prices.get("SPY", pd.Series(dtype=float))
     if spy_series.empty:
-        logger.error("[backtester] SPY price data unavailable — aborting.")
+        logger.error("[backtester] SPY price data unavailable from FMP and Yahoo — aborting.")
         return None
 
     # ── 5. Day-by-day simulation ──────────────────────────────────────────────

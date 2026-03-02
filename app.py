@@ -3174,14 +3174,13 @@ def run_bt(n_clicks, years, capital):
 
     if result is None:
         msg = html.Div([
-            html.Div("⚠ 데이터 부족", style={
+            html.Div("⚠ 분기 데이터 부족", style={
                 "fontSize": "1rem", "fontWeight": "800",
                 "color": f"#{C['amber']}", "marginBottom": "8px",
             }),
             html.Div(
-                f"선택한 {years}년 기간에 해당하는 분기 데이터가 충분하지 않습니다. "
-                "precompute_signals.py를 --years 옵션을 높여 다시 실행하거나 "
-                "FMP_API_KEY가 올바르게 설정되어 있는지 확인하세요.",
+                f"선택한 {years}년 기간에 해당하는 분기 신호 데이터가 2개 미만입니다. "
+                "precompute_signals.py를 --years 옵션을 높여 다시 실행해 주세요.",
                 style={"fontSize": "0.82rem", "color": f"#{C['muted']}"},
             ),
         ], style={"padding": "1rem", "maxWidth": "520px"})
