@@ -1542,7 +1542,190 @@ def _build_portfolio_analysis(port_data: dict):
         ),
     ])
 
-    return html.Div([mini_kpis, charts_row, reb_header, reb_content, raw_holdings])
+    whale_panel = _build_whale_action_panel(port_data)
+    return html.Div([whale_panel, mini_kpis, charts_row, reb_header, reb_content, raw_holdings])
+
+
+def _build_whale_action_panel(port_data: dict) -> html.Div:
+    """
+    Whale Action Panel — compares the latest STRONG BUY signals (optimized strategy)
+    against the user's portfolio and outputs BUY / HOLD / SELL recommendations.
+
+    Optimized filter: score >= STRONG_BUY_MIN_SCORE AND (NEW_ENTRY or AGGRESSIVE_BUY present).
+    """
+    from src.backtester import load_historical_signals, FRESH_SIGNALS, STRONG_BUY_MIN_SCORE  # noqa: PLC0415
+
+    signal_data = load_historical_signals()
+    if not signal_data:
+        return html.Div()
+
+    quarters = signal_data.get("quarters", [])
+    if not quarters:
+        return html.Div()
+
+    # Latest quarter with an available signal_date
+    latest_q = max(quarters, key=lambda q: q["signal_date"])
+    q_label  = latest_q.get("label", "")
+    q_date   = latest_q.get("signal_date", "")
+
+    # Exclude broad-market ETFs / indexes (not actionable stock picks)
+    _EXCLUDE = frozenset({"SPY", "QQQ", "IWM", "VTI", "VOO", "BRK-B", "BRK/B"})
+
+    # Apply optimized strategy filter
+    strong_buys: dict = {}
+    for ticker, info in latest_q["tickers"].items():
+        if (ticker not in _EXCLUDE
+                and info.get("score", 0) >= STRONG_BUY_MIN_SCORE
+                and set(info.get("signals", [])) & FRESH_SIGNALS):
+            strong_buys[ticker] = info
+    strong_buys = dict(sorted(strong_buys.items(), key=lambda x: -x[1]["score"]))
+
+    # User holdings — keyed by ticker (upper)
+    holdings_map = {h["ticker"].upper(): h for h in port_data.get("holdings", [])}
+
+    # Classify
+    buy_tickers  = [(t, v) for t, v in strong_buys.items() if t not in holdings_map]
+    hold_tickers = [(t, v) for t, v in strong_buys.items() if t in holdings_map]
+    sell_tickers = [t for t in holdings_map if t not in strong_buys]
+
+    # ── Card builders ──────────────────────────────────────────────────────
+    _card_base = {
+        "background": f"#{C['card']}", "borderRadius": "10px",
+        "border": f"1px solid #{C['border']}", "padding": "14px 16px",
+        "marginBottom": "8px",
+    }
+
+    def _signal_badge(sig: str) -> html.Span:
+        colors = {
+            "NEW_ENTRY":       (C["green"],  "신규 진입"),
+            "AGGRESSIVE_BUY":  (C["blue"],   "공격적 매수"),
+            "HIGH_CONCENTRATION": (C["amber"], "고농도"),
+        }
+        col, label = colors.get(sig, (C["muted"], sig))
+        return html.Span(label, style={
+            "fontSize": "0.62rem", "fontWeight": "700",
+            "background": f"#{col}22", "color": f"#{col}",
+            "border": f"1px solid #{col}44", "borderRadius": "4px",
+            "padding": "1px 6px", "marginRight": "4px",
+        })
+
+    def _ticker_row(ticker: str, info: dict, action_color: str, action_icon: str) -> html.Div:
+        signals = info.get("signals", [])
+        whales  = info.get("whale_count", 0)
+        score   = info.get("score", 0)
+        company = info.get("company", ticker)
+        return html.Div([
+            html.Div([
+                html.Span(action_icon, style={"marginRight": "6px", "fontSize": "0.9rem"}),
+                html.Span(ticker, style={
+                    "fontWeight": "800", "color": f"#{action_color}",
+                    "fontSize": "0.95rem", "minWidth": "56px", "display": "inline-block",
+                }),
+                html.Span(company[:22] if company else ticker, style={
+                    "fontSize": "0.75rem", "color": f"#{C['muted']}", "flex": "1",
+                }),
+                html.Span(f"Score {score:.0f}", style={
+                    "fontSize": "0.68rem", "color": f"#{C['text']}",
+                    "fontWeight": "700", "marginRight": "6px", "whiteSpace": "nowrap",
+                }),
+                html.Span(f"🐋×{whales}", style={
+                    "fontSize": "0.68rem", "color": f"#{C['muted']}", "whiteSpace": "nowrap",
+                }),
+            ], style={"display": "flex", "alignItems": "center", "gap": "6px",
+                      "marginBottom": "4px"}),
+            html.Div([_signal_badge(s) for s in signals if s in FRESH_SIGNALS]),
+        ], style={**_card_base, "borderLeft": f"3px solid #{action_color}",
+                  "padding": "10px 14px", "marginBottom": "6px"})
+
+    def _sell_row(ticker: str) -> html.Div:
+        h = holdings_map.get(ticker, {})
+        qty  = h.get("quantity", 0)
+        cost = h.get("avg_cost", 0.0)
+        return html.Div([
+            html.Span("🔴", style={"marginRight": "6px", "fontSize": "0.9rem"}),
+            html.Span(ticker, style={
+                "fontWeight": "800", "color": f"#{C['red']}",
+                "fontSize": "0.95rem", "minWidth": "56px", "display": "inline-block",
+            }),
+            html.Span(f"{qty}주 @ ${cost:,.2f}", style={
+                "fontSize": "0.75rem", "color": f"#{C['muted']}", "flex": "1",
+            }),
+            html.Span("웨일 시그널 없음", style={
+                "fontSize": "0.68rem", "color": f"#{C['red']}44",
+                "background": f"#{C['red']}11",
+                "border": f"1px solid #{C['red']}22",
+                "borderRadius": "4px", "padding": "1px 6px",
+            }),
+        ], style={**_card_base, "borderLeft": f"3px solid #{C['red']}",
+                  "padding": "10px 14px", "marginBottom": "6px",
+                  "display": "flex", "alignItems": "center", "gap": "6px"})
+
+    # ── Section column builder ─────────────────────────────────────────────
+    def _col(title: str, icon: str, color: str, count: int, items: list) -> html.Div:
+        return html.Div([
+            html.Div([
+                html.Span(icon, style={"marginRight": "6px"}),
+                html.Span(title, style={
+                    "fontSize": "0.78rem", "fontWeight": "800",
+                    "color": f"#{color}", "letterSpacing": "0.05em",
+                    "textTransform": "uppercase",
+                }),
+                html.Span(f"  {count}건", style={
+                    "fontSize": "0.70rem", "color": f"#{C['muted']}",
+                    "fontWeight": "400", "marginLeft": "4px",
+                }),
+            ], style={"marginBottom": "10px"}),
+            html.Div(items) if items else html.Div(
+                "없음", style={"fontSize": "0.78rem", "color": f"#{C['muted']}",
+                               "padding": "8px 0"},
+            ),
+        ], style={"flex": "1", "minWidth": "260px"})
+
+    buy_items  = [_ticker_row(t, v, C["green"], "🟢") for t, v in buy_tickers[:6]]
+    hold_items = [_ticker_row(t, v, C["blue"],  "🔵") for t, v in hold_tickers]
+    sell_items = [_sell_row(t) for t in sell_tickers[:6]]
+
+    no_signal_warning = None
+    if not strong_buys:
+        no_signal_warning = html.Div(
+            f"⚠ {q_label} 기준 최적화 전략 조건을 만족하는 STRONG BUY 시그널이 없습니다.",
+            style={"fontSize": "0.8rem", "color": f"#{C['amber']}",
+                   "padding": "12px 0"},
+        )
+
+    return html.Div([
+        # Section header
+        html.Div([
+            html.Div([
+                html.Span("🎯 웨일 액션 패널",
+                          style={"fontWeight": "800", "fontSize": "1rem",
+                                 "color": f"#{C['text']}"}),
+                html.Span(f"  최적화 전략 기준  ·  {q_label}  ·  {q_date}",
+                          style={"fontSize": "0.68rem", "color": f"#{C['muted']}",
+                                 "marginLeft": "8px"}),
+            ], style={"display": "flex", "alignItems": "baseline", "flexWrap": "wrap"}),
+            html.Div("동일 비중 · 신규/적극 매수 시그널 · 스탑로스 없음",
+                     style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
+                            "marginTop": "3px"}),
+        ], style={"marginBottom": "14px"}),
+
+        no_signal_warning or html.Div([
+            _col("매수 추천", "🟢", C["green"],  len(buy_tickers),  buy_items),
+            _col("포트폴리오 유지", "🔵", C["blue"],   len(hold_tickers), hold_items),
+            _col("매도 검토", "🔴", C["red"],   len(sell_tickers), sell_items),
+        ], style={"display": "flex", "gap": "16px", "flexWrap": "wrap"}),
+
+        html.Div(
+            "※ 분기 13F 공시 기준 · 45일 지연 반영 · 투자 참고용 (투자 권유 아님)",
+            style={"fontSize": "0.62rem", "color": f"#{C['muted']}",
+                   "marginTop": "12px", "paddingTop": "10px",
+                   "borderTop": f"1px solid #{C['border']}"},
+        ),
+    ], style={
+        "background": f"#{C['card']}", "borderRadius": "12px",
+        "border": f"1px solid #{C['border']}", "padding": "18px 20px",
+        "marginBottom": "1.4rem",
+    })
 
 
 # ── GUIDE CONTENT ─────────────────────────────────────────────────────────────
@@ -3074,7 +3257,6 @@ def build_backtest_tab() -> html.Div:
 
         # Hidden stores
         dcc.Store(id="bt-period-store", data=3),
-        dcc.Store(id="bt-done-count",   data=0),   # increments each time run_bt finishes
 
     ], style={"padding": "0.2rem 0"})
 
@@ -3116,34 +3298,26 @@ def _bt_period_styles(years):
     )
 
 
-# ── Clientside: immediate button + step-bar feedback on click ──────────────
+# ── Clientside: immediate loading feedback on button click only ────────────
+# (Resetting is handled server-side via allow_duplicate outputs in run_bt)
 app.clientside_callback(
     """
-    function(n_clicks, done_count) {
-        var ctx = dash_clientside.callback_context;
-        if (!ctx || !ctx.triggered || !ctx.triggered.length) {
-            return [dash_clientside.no_update,
-                    dash_clientside.no_update,
-                    dash_clientside.no_update];
-        }
-        var trigger = ctx.triggered[0].prop_id;
-        if (trigger === 'bt-run-btn.n_clicks' && n_clicks) {
-            return [
-                "⏳ 실행 중…",
-                true,
-                {"display": "flex", "justifyContent": "center",
-                 "padding": "16px 0 8px"}
-            ];
-        }
-        /* done_count changed → run_bt completed → hide loading bar */
-        return ["▶ Run Backtest", false, {"display": "none"}];
+    function(n_clicks) {
+        if (!n_clicks) return [dash_clientside.no_update,
+                               dash_clientside.no_update,
+                               dash_clientside.no_update];
+        return [
+            "⏳ 실행 중…",
+            true,
+            {"display": "flex", "justifyContent": "center",
+             "padding": "16px 0 8px"}
+        ];
     }
     """,
     Output("bt-run-btn",    "children"),
     Output("bt-run-btn",    "disabled"),
     Output("bt-status-bar", "style"),
     Input("bt-run-btn",     "n_clicks"),
-    Input("bt-done-count",  "data"),
     prevent_initial_call=True,
 )
 
@@ -3194,7 +3368,9 @@ def toggle_bt_strategy(n_opt, n_base):
     Output("bt-kpi-final",       "children"),
     Output("bt-chart-container", "children"),
     Output("bt-trade-log",       "children"),
-    Output("bt-done-count",      "data"),      # ← completion signal (always changes)
+    Output("bt-run-btn",    "children",  allow_duplicate=True),  # reset label
+    Output("bt-run-btn",    "disabled",  allow_duplicate=True),  # re-enable
+    Output("bt-status-bar", "style",     allow_duplicate=True),  # hide bar
     Input("bt-run-btn",          "n_clicks"),
     State("bt-period-store",     "data"),
     State("bt-capital",          "value"),
@@ -3205,7 +3381,10 @@ def run_bt(n_clicks, years, capital, strategy):
     import plotly.graph_objects as go
     from src.backtester import run_backtest, load_historical_signals
 
-    _empty = ("—",) * 8 + (html.Div(), html.Div(), 0)
+    # Reset tuple appended to every return: (btn_label, btn_disabled, statusbar_style)
+    _DONE = ("▶ Run Backtest", False, {"display": "none"})
+
+    _empty = ("—",) * 8 + (html.Div(), html.Div()) + _DONE
     if not n_clicks:
         return _empty
 
@@ -3241,7 +3420,7 @@ def run_bt(n_clicks, years, capital, strategy):
                        "fontFamily": "monospace"},
             ),
         ], style={"padding": "1.5rem", "maxWidth": "540px"})
-        return ("N/A",) * 8 + (msg, html.Div(), n_clicks)
+        return ("N/A",) * 8 + (msg, html.Div()) + _DONE
 
     try:
         result = run_backtest(years=years, initial_capital=capital,
@@ -3251,7 +3430,7 @@ def run_bt(n_clicks, years, capital, strategy):
         err = html.Div(f"Backtest error: {exc}",
                        style={"color": f"#{C['red']}", "padding": "1rem",
                               "fontSize": "0.85rem"})
-        return ("ERR",) * 8 + (err, html.Div(), n_clicks)
+        return ("ERR",) * 8 + (err, html.Div()) + _DONE
 
     if result is None:
         msg = html.Div([
@@ -3265,7 +3444,7 @@ def run_bt(n_clicks, years, capital, strategy):
                 style={"fontSize": "0.82rem", "color": f"#{C['muted']}"},
             ),
         ], style={"padding": "1rem", "maxWidth": "520px"})
-        return ("N/A",) * 8 + (msg, html.Div(), n_clicks)
+        return ("N/A",) * 8 + (msg, html.Div()) + _DONE
 
     try:
         m = result.metrics
@@ -3630,7 +3809,8 @@ def run_bt(n_clicks, years, capital, strategy):
                             "color": f"#{C['text']}", "marginBottom": "12px"}),
             html.Div(detail_cards),
         ])
-        return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section, n_clicks
+        return (total, alpha, ann, dd, sharpe, win, trades, final,
+                chart, log_section) + _DONE
 
     except Exception as exc:
         logger.error("Backtest render failed: %s", exc, exc_info=True)
@@ -3638,7 +3818,7 @@ def run_bt(n_clicks, years, capital, strategy):
             f"렌더링 오류: {exc}",
             style={"color": f"#{C['red']}", "padding": "1rem", "fontSize": "0.85rem"},
         )
-        return ("ERR",) * 8 + (err, html.Div(), n_clicks)
+        return ("ERR",) * 8 + (err, html.Div()) + _DONE
 
 
 # ── CALLBACKS ──────────────────────────────────────────────────────────────────
