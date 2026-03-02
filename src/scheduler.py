@@ -47,8 +47,15 @@ FORM4_WATCH_TICKERS: list[str] = [
 _snapshot: dict[str, dict[str, Any]] = {}
 _last_insider_alert: dict[str, datetime] = {}   # ticker → last alerted time
 _form4_seen_accessions: set[str] = set()         # dedup set for real-time Form 4 alerts
+_activist_seen_tickers: set[str] = set()         # dedup set for 13D/G alerts
 _INSIDER_CLUSTER_MIN  = 3       # insiders that must sell within window
 _INSIDER_CLUSTER_DAYS = 30
+
+# ── Batch buffer for low-urgency signals ─────────────────────────────────────
+# Items: {"type": "watchlist"|"13g", "data": dict, ...}
+# Flushed once per day by _flush_batch_job (10:00 KST = 01:00 UTC).
+_batch_buffer: list[dict[str, Any]] = []
+_batch_seen: set[str] = set()   # dedup key per item
 
 _scheduler = None
 
@@ -145,6 +152,29 @@ def start(app_data: dict[str, Any]) -> None:
         if FORM4_WATCH_TICKERS else "whale holdings (auto)",
     )
 
+    # ── Batch digest job (10:00 KST = 01:00 UTC) ─────────────────────────────
+    # Flushes _batch_buffer: watchlist score changes, 13G filings.
+    _scheduler.add_job(
+        _flush_batch_job,
+        trigger="cron",
+        hour=1,
+        minute=0,
+        id="batch_digest",
+        replace_existing=True,
+    )
+
+    # ── Pre-market briefing (06:00 KST = 21:00 UTC previous day) ─────────────
+    # Combines top signals + upcoming events + institutional news headlines.
+    _scheduler.add_job(
+        _premarket_briefing_job,
+        trigger="cron",
+        hour=21,
+        minute=0,
+        id="premarket_briefing",
+        replace_existing=True,
+        kwargs={"app_data": app_data},
+    )
+
     _scheduler.start()
     logger.info(
         "Scheduler started — refresh every %dh, digest at %02d:00 UTC",
@@ -228,7 +258,8 @@ def _refresh_and_alert(app_data: dict[str, Any]) -> None:
     # ── Alert checks ─────────────────────────────────────────────────────────
     _check_strong_buy_alerts(new_recs)
     _check_tier1_alerts(filings, WHALE_TIERS, new_recs)
-    _check_watchlist_alerts(new_recs)
+    _check_watchlist_alerts(new_recs)          # → batch buffer
+    _check_activist_alerts(activist)           # 13D → real-time, 13G → batch
     _check_insider_cluster_alerts(insiders)
 
     # Refresh snapshot
@@ -303,6 +334,7 @@ def _realtime_form4_job(app_data: dict[str, Any] | None = None) -> None:
             continue
 
         ticker = tx.get("ticker", "")
+        news   = _fetch_ticker_news(ticker, 3) if signal == "INSIDER_BUY" else []
         try:
             send_form4_realtime_alert(
                 ticker    = ticker,
@@ -313,6 +345,7 @@ def _realtime_form4_job(app_data: dict[str, Any] | None = None) -> None:
                 shares    = tx.get("shares", 0),
                 value_usd = value_usd,
                 is_10b51  = False,
+                news_items = news or None,
             )
             new_alerts += 1
         except Exception as exc:
@@ -350,9 +383,77 @@ def _read_news_settings() -> dict:
     return defaults
 
 
+def _summarize_articles_ko(articles: list[dict]) -> list[dict]:
+    """Add 'summary_ko' field to each article using Claude API (claude-haiku-4-5).
+
+    Falls back gracefully — articles without summaries are returned as-is.
+    All articles are summarized in a single API call to minimize latency.
+    """
+    if not articles:
+        return articles
+
+    headlines = [a.get("headline", "") for a in articles if a.get("headline")]
+    if not headlines:
+        return articles
+
+    try:
+        import anthropic  # noqa: PLC0415
+        client = anthropic.Anthropic()
+
+        numbered = "\n".join(f"{i + 1}. {h}" for i, h in enumerate(headlines))
+        prompt = (
+            "아래 영문 기관투자자 관련 뉴스 헤드라인들을 각각 한국어로 1~2문장으로 간결하게 요약해줘. "
+            "기관투자자(헤지펀드, 자산운용사 등)의 움직임과 시장에 대한 시사점을 중심으로 설명해줘. "
+            "번호 순서대로, 각 요약은 한 줄로 작성해줘. 다른 설명 없이 요약문만 출력해줘.\n\n"
+            f"{numbered}"
+        )
+
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip() if msg.content else ""
+
+        # Parse numbered lines: "1. ...", "2. ...", etc.
+        summary_map: dict[int, str] = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # Match "1. summary text" or "1) summary text"
+            import re  # noqa: PLC0415
+            m = re.match(r"^(\d+)[.)]\s*(.+)", line)
+            if m:
+                summary_map[int(m.group(1))] = m.group(2).strip()
+
+        # Attach summaries back to articles (by position)
+        result = []
+        headline_idx = 0
+        for article in articles:
+            if article.get("headline"):
+                headline_idx += 1
+                summary = summary_map.get(headline_idx, "")
+                result.append({**article, "summary_ko": summary})
+            else:
+                result.append(article)
+        return result
+
+    except ImportError:
+        logger.debug("[scheduler] anthropic SDK not installed — skipping Korean summaries")
+    except Exception as exc:
+        logger.warning("[scheduler] Korean summary generation failed: %s", exc)
+
+    return articles
+
+
 def _daily_news_job() -> None:
-    """Send the day's top financial news headline to Slack if subscription is ON
-    and the current UTC hour matches the user-configured delivery hour."""
+    """Send institutional investor news to Slack if subscription is ON
+    and the current UTC hour matches the user-configured delivery hour.
+
+    Fetches articles focused on institutional investor activity (hedge funds,
+    13F filings, activist investors, etc.) and adds Korean summaries via Claude.
+    """
     settings = _read_news_settings()
 
     if not settings.get("enabled"):
@@ -371,27 +472,32 @@ def _daily_news_job() -> None:
         return
 
     try:
-        from src.news_collector import fetch_market_news, item_matches_topics  # noqa: PLC0415
-        from src.slack_notifier import send_daily_news_alert                   # noqa: PLC0415
+        from src.news_collector import fetch_institutional_news, item_matches_topics  # noqa: PLC0415
+        from src.slack_notifier import send_daily_news_alert                          # noqa: PLC0415
     except Exception as exc:
         logger.error("[scheduler] Daily news import error: %s", exc)
         return
 
     try:
         topics = settings.get("topics") or []
-        # Fetch a larger pool to find a topic-matching article
-        candidates = fetch_market_news(20)
+        # Fetch institutional investor news pool
+        candidates = fetch_institutional_news(20)
         if topics:
             candidates = [n for n in candidates if item_matches_topics(n["headline"], topics)]
 
-        if candidates:
-            send_daily_news_alert(candidates[0])
-            logger.info(
-                "[scheduler] Daily news sent (topics=%s): %s",
-                topics or "all", candidates[0].get("headline", "")[:60],
-            )
-        else:
-            logger.info("[scheduler] No matching news for topics %s — skipping", topics)
+        if not candidates:
+            logger.info("[scheduler] No institutional news for topics %s — skipping", topics)
+            return
+
+        # Take top 5 articles and add Korean summaries
+        top = candidates[:5]
+        top = _summarize_articles_ko(top)
+
+        send_daily_news_alert(top)
+        logger.info(
+            "[scheduler] Institutional news alert sent — %d articles (topics=%s)",
+            len(top), topics or "all",
+        )
     except Exception as exc:
         logger.error("[scheduler] Daily news job error: %s", exc)
 
@@ -461,6 +567,55 @@ def _daily_digest_job(app_data: dict[str, Any]) -> None:
 # Alert helpers
 # ---------------------------------------------------------------------------
 
+def _fetch_ticker_news(ticker: str, n: int = 3) -> list[dict]:
+    """Fetch up to `n` recent news items for `ticker`. Never raises."""
+    try:
+        from src.news_collector import search_ticker_news  # noqa: PLC0415
+        return search_ticker_news(ticker, n)
+    except Exception as exc:
+        logger.debug("[scheduler] Ticker news fetch failed (%s): %s", ticker, exc)
+        return []
+
+
+def _generate_ai_context(
+    ticker: str,
+    company: str,
+    whale_name: str,
+    whale_style: str,
+    filing_type: str,
+) -> str:
+    """Generate 2-3 sentence Korean investment context using Claude Haiku.
+
+    Used only for high-value alerts: Tier 1 new entries and 13D filings.
+    Returns empty string if API unavailable or on any error.
+    """
+    try:
+        import anthropic  # noqa: PLC0415
+        client = anthropic.Anthropic()
+
+        prompt = (
+            f"다음 내용을 바탕으로 한국어로 2~3문장의 투자 시사점을 작성해줘.\n"
+            f"- 기관투자자: {whale_name} ({whale_style} 스타일)\n"
+            f"- 종목: {ticker} ({company})\n"
+            f"- 공시 유형: {filing_type}\n\n"
+            "① 이 펀드가 이 종목을 매수할 가능성 있는 투자 thesis, "
+            "② 주목할 리스크 또는 기회, "
+            "③ 단기 주가에 미칠 영향을 각 1문장씩 포함해줘. "
+            "과도한 수식어 없이 간결하게. 번호나 머리말 없이 바로 본문만 출력해줘."
+        )
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip() if msg.content else ""
+    except ImportError:
+        logger.debug("[scheduler] anthropic SDK not installed — no AI context")
+    except Exception as exc:
+        logger.warning("[scheduler] AI context generation failed (%s): %s", ticker, exc)
+    return ""
+
+
 def _check_strong_buy_alerts(new_recs: list[dict]) -> None:
     """Fire send_strong_buy_alert() for any ticker newly reaching STRONG BUY."""
     from src.slack_notifier import send_strong_buy_alert  # noqa: PLC0415
@@ -474,8 +629,9 @@ def _check_strong_buy_alerts(new_recs: list[dict]) -> None:
             continue  # Already alerted this cycle
 
         logger.info("[scheduler] New STRONG BUY: %s", ticker)
+        news = _fetch_ticker_news(ticker, 3)
         try:
-            send_strong_buy_alert(rec)
+            send_strong_buy_alert(rec, news_items=news or None)
         except Exception as exc:
             logger.error("[scheduler] Alert send failed (%s): %s", ticker, exc)
 
@@ -485,7 +641,12 @@ def _check_tier1_alerts(
     whale_tiers: dict,
     new_recs: list[dict],
 ) -> None:
-    """Fire send_tier1_entry_alert() for any new Tier 1 NEW_ENTRY signal."""
+    """Fire send_tier1_entry_alert() for any new Tier 1 NEW_ENTRY signal.
+
+    Enriched with:
+      - 3 recent news items for the ticker
+      - AI-generated investment context (Task 4)
+    """
     from src.slack_notifier import send_tier1_entry_alert  # noqa: PLC0415
 
     tier1_whales = {
@@ -497,6 +658,7 @@ def _check_tier1_alerts(
         holdings = filings.get(whale_name, [])
         tier_info = whale_tiers.get(whale_name, {})
         tier_label = tier_info.get("label", "T1")
+        whale_style = tier_info.get("style", "")
 
         for holding in holdings:
             if holding.get("signal") != "NEW_ENTRY":
@@ -514,6 +676,16 @@ def _check_tier1_alerts(
             company = rec.get("company", "") or holding.get("company", "")
             score   = rec.get("conviction_score", 0)
 
+            # Fetch ticker news + generate AI context (Task 4)
+            news       = _fetch_ticker_news(ticker, 3)
+            ai_context = _generate_ai_context(
+                ticker=ticker,
+                company=company,
+                whale_name=whale_name,
+                whale_style=whale_style,
+                filing_type="13F NEW_ENTRY",
+            )
+
             logger.info("[scheduler] Tier 1 entry: %s → %s", whale_name, ticker)
             try:
                 send_tier1_entry_alert(
@@ -523,17 +695,20 @@ def _check_tier1_alerts(
                     company=company,
                     signal="NEW_ENTRY",
                     score=score,
+                    news_items=news or None,
+                    ai_context=ai_context or None,
                 )
             except Exception as exc:
                 logger.error("[scheduler] T1 alert failed (%s): %s", ticker, exc)
 
 
 def _check_watchlist_alerts(new_recs: list[dict]) -> None:
-    """Fire send_watchlist_alert() when a watched ticker changes score by ≥ ALERT_MIN_SCORE."""
+    """Queue watchlist score changes into the batch buffer (low urgency).
+
+    Previously sent immediately; now batched and flushed once per day at 10:00 KST.
+    """
     if not ALERT_WATCHLIST:
         return
-
-    from src.slack_notifier import send_watchlist_alert  # noqa: PLC0415
 
     for rec in new_recs:
         ticker = rec["ticker"]
@@ -544,14 +719,137 @@ def _check_watchlist_alerts(new_recs: list[dict]) -> None:
         if abs(curr_score - prev_score) < ALERT_MIN_SCORE:
             continue
 
+        dedup_key = f"watchlist:{ticker}:{prev_score}:{curr_score}"
+        if dedup_key in _batch_seen:
+            continue
+        _batch_seen.add(dedup_key)
+        _batch_buffer.append({"type": "watchlist", "data": rec, "old_score": prev_score})
         logger.info(
-            "[scheduler] Watchlist alert: %s score %d→%d",
+            "[scheduler] Watchlist queued (batch): %s score %d→%d",
             ticker, prev_score, curr_score,
         )
-        try:
-            send_watchlist_alert(rec, old_score=prev_score)
-        except Exception as exc:
-            logger.error("[scheduler] Watchlist alert failed (%s): %s", ticker, exc)
+
+
+def _check_activist_alerts(activist: dict) -> None:
+    """Route SC 13D/G filings: 13D → real-time alert, 13G → batch buffer.
+
+    13D = activist intent (경영 참여 의도) → high urgency, send immediately
+    13G = passive stake (단순 투자)       → low urgency, batch daily
+    """
+    if not activist:
+        return
+
+    from src.slack_notifier import send_activist_13d_alert  # noqa: PLC0415
+
+    for ticker, filings_list in activist.items():
+        if isinstance(filings_list, dict):
+            filings_list = [filings_list]
+        for filing in (filings_list or []):
+            signal    = filing.get("signal", "")
+            form_type = filing.get("form_type", "")
+            filer     = filing.get("filer", filing.get("whale_name", ""))
+            ownership = filing.get("ownership_pct", 0.0)
+            company   = filing.get("company", "")
+
+            dedup_key = f"{form_type}:{ticker}:{filer}"
+            if dedup_key in _activist_seen_tickers:
+                continue
+
+            if signal == "ACTIVIST_STAKE" or "13D" in form_type:
+                # ── Real-time: 13D activist alert ─────────────────────────
+                _activist_seen_tickers.add(dedup_key)
+                news       = _fetch_ticker_news(ticker, 3)
+                ai_context = _generate_ai_context(
+                    ticker=ticker,
+                    company=company,
+                    whale_name=filer,
+                    whale_style="Activist",
+                    filing_type="SC 13D",
+                )
+                logger.info("[scheduler] 13D activist alert: %s → %s", filer, ticker)
+                try:
+                    send_activist_13d_alert(
+                        ticker=ticker,
+                        company=company,
+                        filer=filer,
+                        ownership_pct=ownership,
+                        ai_context=ai_context or None,
+                        news_items=news or None,
+                    )
+                except Exception as exc:
+                    logger.error("[scheduler] 13D alert failed (%s): %s", ticker, exc)
+
+            elif signal == "LARGE_PASSIVE_STAKE" or "13G" in form_type:
+                # ── Batch: 13G passive stake ───────────────────────────────
+                _activist_seen_tickers.add(dedup_key)
+                _batch_buffer.append({"type": "13g", "data": filing})
+                logger.info("[scheduler] 13G passive queued (batch): %s → %s", filer, ticker)
+
+
+def _flush_batch_job() -> None:
+    """Flush _batch_buffer → send_batch_digest(). Runs daily at 10:00 KST (01:00 UTC)."""
+    if not _batch_buffer:
+        logger.info("[scheduler] Batch buffer empty — skipping digest")
+        return
+
+    items = list(_batch_buffer)
+    _batch_buffer.clear()
+
+    logger.info("[scheduler] Flushing batch digest — %d items", len(items))
+    try:
+        from src.slack_notifier import send_batch_digest  # noqa: PLC0415
+        send_batch_digest(items)
+    except Exception as exc:
+        logger.error("[scheduler] Batch digest failed: %s", exc)
+
+
+def _premarket_briefing_job(app_data: dict[str, Any]) -> None:
+    """Send pre-market briefing at 06:00 KST (21:00 UTC previous evening).
+
+    Combines:
+      - Top BUY / STRONG BUY institutional signals
+      - Market events in the next 7 days
+      - Institutional investor news headlines (with Korean summaries)
+    """
+    try:
+        from src.slack_notifier import send_premarket_briefing  # noqa: PLC0415
+    except Exception as exc:
+        logger.error("[scheduler] Premarket briefing import error: %s", exc)
+        return
+
+    # ── Top signals ───────────────────────────────────────────────────────────
+    recs     = app_data.get("recommendations", [])
+    top_recs = [r for r in recs if r.get("recommendation") in {"STRONG BUY", "BUY"}][:5]
+
+    # ── Upcoming events (next 7 days) ─────────────────────────────────────────
+    events: list[dict] = []
+    try:
+        from src.market_events import get_upcoming_events  # noqa: PLC0415
+        events = get_upcoming_events(days_ahead=7)
+    except Exception as exc:
+        logger.debug("[scheduler] Premarket events fetch failed: %s", exc)
+
+    # ── Institutional news with Korean summaries ──────────────────────────────
+    news: list[dict] = []
+    try:
+        from src.news_collector import fetch_institutional_news  # noqa: PLC0415
+        raw_news = fetch_institutional_news(5)
+        news     = _summarize_articles_ko(raw_news[:3])
+    except Exception as exc:
+        logger.debug("[scheduler] Premarket news fetch failed: %s", exc)
+
+    if not top_recs and not events and not news:
+        logger.info("[scheduler] Premarket briefing: no content to send — skipping")
+        return
+
+    try:
+        send_premarket_briefing(top_recs=top_recs, events=events, news_items=news)
+        logger.info(
+            "[scheduler] Premarket briefing sent — %d signals, %d events, %d news",
+            len(top_recs), len(events), len(news),
+        )
+    except Exception as exc:
+        logger.error("[scheduler] Premarket briefing send failed: %s", exc)
 
 
 def _check_insider_cluster_alerts(insiders: dict[str, list[dict]]) -> None:

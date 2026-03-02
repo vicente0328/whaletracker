@@ -2898,7 +2898,18 @@ def build_backtest_tab() -> html.Div:
                                           "color": f"#{color}", "lineHeight": "1.1"}),
         ], style={**_card, "flex": "1", "minWidth": "130px", "textAlign": "center"})
 
+    # Strategy presets
+    _strat_presets = {
+        "optimized": dict(equal_weight=True, require_fresh=True,  min_whale_count=1,
+                          stop_loss_pct=0.0,  max_positions=8),
+        "baseline":  dict(equal_weight=False, require_fresh=False, min_whale_count=1,
+                          stop_loss_pct=0.15, max_positions=8),
+    }
+
     return html.Div([
+        # ── Hidden stores ────────────────────────────────────────────────────
+        dcc.Store(id="bt-strategy-store", data="optimized"),
+
         # ── Header ──────────────────────────────────────────────────────────
         html.Div([
             html.Div([
@@ -2907,8 +2918,8 @@ def build_backtest_tab() -> html.Div:
                     "color": f"#{C['text']}",
                 }),
                 html.P(
-                    "Simulates following WhaleTracker STRONG BUY signals · "
-                    "equal-weight · quarterly rebalancing · 45-day filing delay · no fees",
+                    id="bt-strategy-desc",
+                    children="최적화 전략: 동일 비중 · 스탑로스 없음 · 신규/적극 매수 시그널만 · 분기 리밸런싱 · 45일 지연 · 수수료 없음",
                     style={"margin": "4px 0 0", "fontSize": "0.72rem",
                            "color": f"#{C['muted']}"},
                 ),
@@ -2918,6 +2929,28 @@ def build_backtest_tab() -> html.Div:
 
         # ── Controls ────────────────────────────────────────────────────────
         html.Div([
+            # Strategy mode
+            html.Div([
+                html.Div("Strategy", style={"fontSize": "0.65rem", "fontWeight": "700",
+                                            "color": f"#{C['muted']}", "marginBottom": "6px",
+                                            "letterSpacing": "0.06em", "textTransform": "uppercase"}),
+                html.Div([
+                    html.Button("Optimized ✨", id="bt-strat-optimized", n_clicks=0,
+                                style={"padding": "7px 16px", "borderRadius": "8px",
+                                       "fontSize": "0.82rem", "fontWeight": "700",
+                                       "cursor": "pointer", "transition": "all 0.15s",
+                                       "border": f"2px solid #{C['blue']}",
+                                       "background": f"#{C['blue']}",
+                                       "color": "#fff"}),
+                    html.Button("Baseline", id="bt-strat-baseline", n_clicks=0,
+                                style={"padding": "7px 16px", "borderRadius": "8px",
+                                       "fontSize": "0.82rem", "fontWeight": "700",
+                                       "cursor": "pointer", "transition": "all 0.15s",
+                                       "border": f"1px solid #{C['border']}",
+                                       "background": f"#{C['card2']}",
+                                       "color": f"#{C['muted']}"}),
+                ], style={"display": "flex", "gap": "8px"}),
+            ]),
             # Period presets
             html.Div([
                 html.Div("Period", style={"fontSize": "0.65rem", "fontWeight": "700",
@@ -3115,6 +3148,41 @@ app.clientside_callback(
 )
 
 
+# ── Strategy mode toggle ───────────────────────────────────────────────────────
+_BT_STRAT_OPTIMIZED_STYLE = {
+    "padding": "7px 16px", "borderRadius": "8px",
+    "fontSize": "0.82rem", "fontWeight": "700",
+    "cursor": "pointer", "transition": "all 0.15s",
+    "border": f"2px solid #{C['blue']}", "background": f"#{C['blue']}", "color": "#fff",
+}
+_BT_STRAT_INACTIVE_STYLE = {
+    "padding": "7px 16px", "borderRadius": "8px",
+    "fontSize": "0.82rem", "fontWeight": "700",
+    "cursor": "pointer", "transition": "all 0.15s",
+    "border": f"1px solid #{C['border']}", "background": f"#{C['card2']}", "color": f"#{C['muted']}",
+}
+
+
+@app.callback(
+    Output("bt-strategy-store",   "data"),
+    Output("bt-strat-optimized",  "style"),
+    Output("bt-strat-baseline",   "style"),
+    Output("bt-strategy-desc",    "children"),
+    Input("bt-strat-optimized",   "n_clicks"),
+    Input("bt-strat-baseline",    "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_bt_strategy(n_opt, n_base):
+    from dash import ctx
+    triggered = ctx.triggered_id or "bt-strat-optimized"
+    if triggered == "bt-strat-optimized":
+        desc = "최적화 전략: 동일 비중 · 스탑로스 없음 · 신규/적극 매수 시그널만 · 분기 리밸런싱 · 45일 지연 · 수수료 없음"
+        return "optimized", _BT_STRAT_OPTIMIZED_STYLE, _BT_STRAT_INACTIVE_STYLE, desc
+    else:
+        desc = "기본 전략: 컨빅션 점수 비중 · 15% 스탑로스 · 모든 시그널 포함 · 분기 리밸런싱 · 45일 지연 · 수수료 없음"
+        return "baseline", _BT_STRAT_INACTIVE_STYLE, _BT_STRAT_OPTIMIZED_STYLE, desc
+
+
 @app.callback(
     Output("bt-kpi-total",       "children"),
     Output("bt-kpi-alpha",       "children"),
@@ -3130,9 +3198,10 @@ app.clientside_callback(
     Input("bt-run-btn",          "n_clicks"),
     State("bt-period-store",     "data"),
     State("bt-capital",          "value"),
+    State("bt-strategy-store",   "data"),
     prevent_initial_call=True,
 )
-def run_bt(n_clicks, years, capital):
+def run_bt(n_clicks, years, capital, strategy):
     import plotly.graph_objects as go
     from src.backtester import run_backtest, load_historical_signals
 
@@ -3140,8 +3209,17 @@ def run_bt(n_clicks, years, capital):
     if not n_clicks:
         return _empty
 
-    years   = int(years   or 3)
-    capital = float(capital or 100_000)
+    years    = int(years    or 3)
+    capital  = float(capital or 100_000)
+    strategy = strategy or "optimized"
+
+    _strat_params = {
+        "optimized": dict(equal_weight=True,  require_fresh=True,  min_whale_count=1,
+                          stop_loss_pct=0.0,  max_positions=8),
+        "baseline":  dict(equal_weight=False, require_fresh=False, min_whale_count=1,
+                          stop_loss_pct=0.15, max_positions=8),
+    }
+    strat_kwargs = _strat_params.get(strategy, _strat_params["optimized"])
 
     # ── Check pre-computed signals file exists ─────────────────────────────
     if load_historical_signals() is None:
@@ -3166,7 +3244,8 @@ def run_bt(n_clicks, years, capital):
         return ("N/A",) * 8 + (msg, html.Div(), n_clicks)
 
     try:
-        result = run_backtest(years=years, initial_capital=capital, min_signal="STRONG BUY")
+        result = run_backtest(years=years, initial_capital=capital,
+                              min_signal="STRONG BUY", **strat_kwargs)
     except Exception as exc:
         logger.error("Backtest failed: %s", exc, exc_info=True)
         err = html.Div(f"Backtest error: {exc}",
@@ -3886,20 +3965,22 @@ def sync_settings_open_state(n_clicks, is_open):
     prevent_initial_call=True,
 )
 def send_test_slack_news(n_clicks):
-    """Immediately send a test Daily News Slack alert."""
+    """Immediately send a test institutional news Slack alert with Korean summaries."""
     if not n_clicks:
         return ""
     try:
-        from src.news_collector import fetch_market_news      # noqa: PLC0415
-        from src.slack_notifier import send_daily_news_alert  # noqa: PLC0415
-        items = fetch_market_news(5)
+        from src.news_collector import fetch_institutional_news  # noqa: PLC0415
+        from src.scheduler import _summarize_articles_ko         # noqa: PLC0415
+        from src.slack_notifier import send_daily_news_alert     # noqa: PLC0415
+        items = fetch_institutional_news(5)
         if not items:
             return "⚠ 뉴스 데이터 없음"
-        ok = send_daily_news_alert(items[0])
+        items = _summarize_articles_ko(items)
+        ok = send_daily_news_alert(items)
         if not ok:
             return "✗ Slack 전송 실패 (토큰/채널 확인)"
         headline = items[0].get("headline", "")[:40]
-        return f"✓ 발송 완료 — {headline}…"
+        return f"✓ 발송 완료 ({len(items)}건) — {headline}…"
     except Exception as exc:
         logger.error("Test Slack news failed: %s", exc, exc_info=True)
         return f"✗ 오류: {exc}"

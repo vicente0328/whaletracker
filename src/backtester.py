@@ -56,6 +56,11 @@ STRONG_BUY_MIN_SCORE = 7    # raised from 6 — matches new precompute threshold
 BUY_MIN_SCORE        = 3
 STOP_LOSS_PCT        = 0.15  # exit if position drops ≥15% below cost basis
 
+# ── Strategy constants ─────────────────────────────────────────────────────
+# Signals that indicate *fresh* institutional buying (vs merely holding).
+# Tickers with only HIGH_CONCENTRATION are already owned but may not be accumulating.
+FRESH_SIGNALS = frozenset({"NEW_ENTRY", "AGGRESSIVE_BUY"})
+
 
 # ── Data classes ───────────────────────────────────────────────────────────────
 
@@ -265,14 +270,46 @@ def _price_on(prices: dict[str, pd.Series], ticker: str, date_str: str) -> float
 
 # ── Simulation ────────────────────────────────────────────────────────────────
 
+def _qualifies(
+    info:            dict,
+    min_score:       float,
+    require_fresh:   bool,
+    min_whale_count: int,
+) -> bool:
+    """Return True if a ticker's signal info meets strategy entry criteria."""
+    if info.get("score", 0) < min_score:
+        return False
+    if min_whale_count > 1 and info.get("whale_count", 1) < min_whale_count:
+        return False
+    if require_fresh:
+        signals = set(info.get("signals", []))
+        if not (signals & FRESH_SIGNALS):
+            return False
+    return True
+
+
 def run_backtest(
-    years:           int   = 3,
-    initial_capital: float = 100_000.0,
-    min_signal:      str   = "STRONG BUY",
-    max_positions:   int   = 8,     # reduced from 15: concentration improves alpha
+    years:               int   = 3,
+    initial_capital:     float = 100_000.0,
+    min_signal:          str   = "STRONG BUY",
+    max_positions:       int   = 8,      # reduced from 15: concentration improves alpha
+    # ── Strategy tuning parameters ──────────────────────────────────────────
+    equal_weight:        bool  = False,  # True → equal allocation; False → score-weighted
+    require_fresh:       bool  = False,  # True → skip tickers with only HIGH_CONCENTRATION
+    min_whale_count:     int   = 1,      # require ≥ N unique whale sources
+    stop_loss_pct:       float = 0.15,   # fraction below cost to trigger stop (0 = disabled)
+    min_score_override:  float | None = None,  # override STRONG_BUY_MIN_SCORE
 ) -> BacktestResult | None:
     """
     Simulate following WhaleTracker signals over `years` years.
+
+    Strategy parameters:
+      equal_weight       — divide portfolio equally vs proportional to conviction score
+      require_fresh      — skip tickers whose only signals are HIGH_CONCENTRATION
+                           (fresh entries / aggressive buys are more predictive)
+      min_whale_count    — minimum number of unique whale sources (consensus filter)
+      stop_loss_pct      — exit when position drops this fraction below cost (0 = off)
+      min_score_override — override the STRONG_BUY_MIN_SCORE threshold
 
     Returns BacktestResult on success, None on critical data failure.
 
@@ -311,16 +348,25 @@ def run_backtest(
         )
         return None
 
-    logger.info("[backtester] %d-year sim | %d quarters | capital=%.0f | signal=%s",
-                years, len(quarters_in_window), initial_capital, min_signal)
+    logger.info(
+        "[backtester] %d-year sim | %d quarters | capital=%.0f | signal=%s | "
+        "eq=%s fresh=%s min_whales=%d stop=%.0f%% positions=%d",
+        years, len(quarters_in_window), initial_capital, min_signal,
+        equal_weight, require_fresh, min_whale_count,
+        stop_loss_pct * 100, max_positions,
+    )
 
     # ── 3. Determine which tickers we need prices for ─────────────────────────
-    min_score = STRONG_BUY_MIN_SCORE if min_signal == "STRONG BUY" else BUY_MIN_SCORE
+    min_score = (
+        min_score_override if min_score_override is not None
+        else STRONG_BUY_MIN_SCORE if min_signal == "STRONG BUY"
+        else BUY_MIN_SCORE
+    )
     all_tickers: set[str] = {"SPY"}
 
     for q in quarters_in_window:
         for ticker, info in q["tickers"].items():
-            if info.get("score", 0) >= min_score:
+            if _qualifies(info, min_score, require_fresh, min_whale_count):
                 all_tickers.add(ticker)
 
     logger.info("[backtester] Fetching prices for %d tickers (%s → %s) …",
@@ -364,7 +410,7 @@ def run_backtest(
         for ticker in list(positions.keys()):
             px   = _price_on(all_prices, ticker, day)
             cost = cost_basis.get(ticker, 0)
-            if px and cost > 0 and px <= cost * (1 - STOP_LOSS_PCT):
+            if stop_loss_pct > 0 and px and cost > 0 and px <= cost * (1 - stop_loss_pct):
                 shares = positions.pop(ticker)
                 cost_basis.pop(ticker, None)
                 val = shares * px
@@ -386,7 +432,7 @@ def run_backtest(
             # Select tickers meeting threshold, sorted by score desc, capped
             candidates = sorted(
                 [t for t, info in scores.items()
-                 if info.get("score", 0) >= min_score
+                 if _qualifies(info, min_score, require_fresh, min_whale_count)
                  and t in all_prices],              # only if we have price data
                 key=lambda t: scores[t]["score"],
                 reverse=True,
@@ -429,14 +475,18 @@ def run_backtest(
                 positions[t] * (_price_on(all_prices, t, day) or cost_basis.get(t, 0))
                 for t in positions
             )
-            # Weight each position proportionally to its conviction score
-            total_score = sum(scores[t]["score"] for t in candidates if t in target_set)
-            if total_score <= 0:
-                total_score = n_targets  # fallback to equal-weight if scores absent
+            # Allocation weight: equal or score-proportional
+            if equal_weight:
+                def _target_val(ticker: str) -> float:
+                    return port_now / n_targets
+            else:
+                total_score = sum(scores[t]["score"] for t in candidates if t in target_set)
+                if total_score <= 0:
+                    total_score = n_targets  # fallback to equal-weight if scores absent
 
-            def _target_val(ticker: str) -> float:
-                w = scores[ticker]["score"] / total_score if total_score else (1 / n_targets)
-                return port_now * w
+                def _target_val(ticker: str) -> float:  # type: ignore[misc]
+                    w = scores[ticker]["score"] / total_score if total_score else (1 / n_targets)
+                    return port_now * w
 
             # ── Enter / rebalance positions ───────────────────────────────────
             for ticker in candidates:
@@ -505,6 +555,15 @@ def run_backtest(
     bench_s = pd.Series(bench_vals, dtype=float).sort_index()
     metrics = _calc_metrics(port_s, bench_s, initial_capital)
     metrics["n_trades"] = len(trades)
+    # Record strategy parameters for comparison
+    metrics["strategy"] = {
+        "equal_weight":    equal_weight,
+        "require_fresh":   require_fresh,
+        "min_whale_count": min_whale_count,
+        "stop_loss_pct":   stop_loss_pct,
+        "max_positions":   max_positions,
+        "min_score":       min_score,
+    }
 
     logger.info(
         "[backtester] Done — return %.1f%%, SPY %.1f%%, alpha %.1f%%",
@@ -573,3 +632,64 @@ def _calc_metrics(
         "final_value":           round(float(port.iloc[-1]), 2),
         "n_trades":              0,   # overwritten after call
     }
+
+
+# ── Parameter sweep optimizer ─────────────────────────────────────────────────
+
+def optimize_backtest(years: int = 3) -> list[dict]:
+    """
+    Grid-search over key strategy parameters and return results sorted by alpha.
+
+    Tests combinations of:
+      - equal_weight:    False (score-weighted) vs True (equal-weight)
+      - require_fresh:   False (all signals) vs True (NEW_ENTRY or AGGRESSIVE_BUY only)
+      - min_whale_count: 1 (any) vs 2 (consensus)
+      - stop_loss_pct:   0.15 / 0.25 / 0.0 (disabled)
+      - max_positions:   3 / 5 / 8
+      - min_score:       7 / 9
+
+    Returns a list of dicts [{params, alpha, total_return, sharpe, n_trades}, ...],
+    sorted descending by alpha_pct.
+    """
+    import itertools
+
+    grid = dict(
+        equal_weight      = [False, True],
+        require_fresh     = [False, True],
+        min_whale_count   = [1, 2],
+        stop_loss_pct     = [0.15, 0.25, 0.0],
+        max_positions     = [3, 5, 8],
+        min_score_override= [7.0, 9.0],
+    )
+
+    keys   = list(grid.keys())
+    combos = list(itertools.product(*grid.values()))
+    logger.info("[optimizer] Testing %d parameter combinations …", len(combos))
+
+    results = []
+    for combo in combos:
+        params = dict(zip(keys, combo))
+        try:
+            r = run_backtest(years=years, **params)
+            if r is None:
+                continue
+            m = r.metrics
+            results.append({
+                "params":        params,
+                "alpha_pct":     m.get("alpha_pct", -999),
+                "total_return":  m.get("total_return_pct", 0),
+                "benchmark":     m.get("benchmark_return_pct", 0),
+                "sharpe":        m.get("sharpe_ratio", 0),
+                "max_dd":        m.get("max_drawdown_pct", 0),
+                "n_trades":      m.get("n_trades", 0),
+            })
+        except Exception as exc:
+            logger.warning("[optimizer] Combo %s failed: %s", params, exc)
+
+    results.sort(key=lambda x: x["alpha_pct"], reverse=True)
+    logger.info(
+        "[optimizer] Best alpha: %.1f%% | params: %s",
+        results[0]["alpha_pct"] if results else -999,
+        results[0]["params"]    if results else {},
+    )
+    return results

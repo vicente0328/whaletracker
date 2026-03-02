@@ -64,6 +64,7 @@ def _post(blocks: list, text: str, channel: str | None = None) -> bool:
 
 def send_strong_buy_alert(
     rec: dict[str, Any],
+    news_items: list[dict[str, Any]] | None = None,
     channel: str | None = None,
 ) -> bool:
     """Fire when a ticker reaches STRONG BUY for the first time this cycle."""
@@ -92,6 +93,21 @@ def send_strong_buy_alert(
         blocks.append({"type": "context", "elements": [
             {"type": "mrkdwn", "text": f"🏷️ *Tier:* {tier_line}"}
         ]})
+
+    # ── Related news ──────────────────────────────────────────────────────────
+    if news_items:
+        blocks.append({"type": "divider"})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*📰 {ticker} 관련 최신 뉴스:*"}})
+        for item in news_items[:3]:
+            url  = item.get("url", "")
+            head = item.get("headline", "")
+            src  = item.get("source", "")
+            line = f"• <{url}|{head}>" if url else f"• {head}"
+            if src:
+                line += f"  _{src}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+
     blocks.append({"type": "divider"})
 
     text = f"🚀 STRONG BUY — {ticker} ({company}) | Score: {score}/12 | {signals}"
@@ -105,6 +121,8 @@ def send_tier1_entry_alert(
     company: str,
     signal: str,
     score: int,
+    news_items: list[dict[str, Any]] | None = None,
+    ai_context: str | None = None,
     channel: str | None = None,
 ) -> bool:
     """Fire when a Tier 1 whale takes a brand-new position (NEW_ENTRY)."""
@@ -128,12 +146,33 @@ def send_tier1_entry_alert(
             {"type": "mrkdwn", "text": f"*Signal*\n{sig_label}"},
             {"type": "mrkdwn", "text": f"*Current Score*\n{score} / 12"},
         ]},
-        {"type": "context", "elements": [
-            {"type": "mrkdwn",
-             "text": "ℹ️ Tier 1 = long-term value / macro investors with verified long-term returns."}
-        ]},
-        {"type": "divider"},
     ]
+
+    # ── AI investment context ─────────────────────────────────────────────────
+    if ai_context:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"🤖 *AI 투자 시사점*\n{ai_context}"}})
+
+    blocks.append({"type": "context", "elements": [
+        {"type": "mrkdwn",
+         "text": "ℹ️ Tier 1 = long-term value / macro investors with verified long-term returns."}
+    ]})
+
+    # ── Related news ──────────────────────────────────────────────────────────
+    if news_items:
+        blocks.append({"type": "divider"})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*📰 {ticker} 관련 최신 뉴스:*"}})
+        for item in news_items[:3]:
+            url  = item.get("url", "")
+            head = item.get("headline", "")
+            src  = item.get("source", "")
+            line = f"• <{url}|{head}>" if url else f"• {head}"
+            if src:
+                line += f"  _{src}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+
+    blocks.append({"type": "divider"})
     text = f"🐋 Tier 1 Alert: {whale_name} ({tier_label}) → {sig_label} {ticker}"
     return _post(blocks, text, channel)
 
@@ -200,6 +239,7 @@ def send_form4_realtime_alert(
     shares: int,
     value_usd: float,
     is_10b51: bool = False,
+    news_items: list[dict[str, Any]] | None = None,
     channel: str | None = None,
 ) -> bool:
     """Near real-time Form 4 alert for a single insider transaction on a watched ticker."""
@@ -228,8 +268,23 @@ def send_form4_realtime_alert(
                       if is_10b51 else
                       "_Form 4 filing detected within 2 hours of EDGAR submission._")},
         ]},
-        {"type": "divider"},
     ]
+
+    # ── Related news ──────────────────────────────────────────────────────────
+    if news_items:
+        blocks.append({"type": "divider"})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*📰 {ticker} 관련 최신 뉴스:*"}})
+        for item in news_items[:3]:
+            url  = item.get("url", "")
+            head = item.get("headline", "")
+            src  = item.get("source", "")
+            line = f"• <{url}|{head}>" if url else f"• {head}"
+            if src:
+                line += f"  _{src}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+
+    blocks.append({"type": "divider"})
     text = f"⚡ {sig_icon} {ticker} — {sig_label} | {insider} ({role}) | {val_str}"
     return _post(blocks, text, channel)
 
@@ -240,7 +295,7 @@ def send_daily_digest(
     news: list[dict[str, Any]] | None = None,
     channel: str | None = None,
 ) -> bool:
-    """Morning digest: top 5 STRONG BUY / BUY recommendations + optional news + rebalancing."""
+    """Morning digest: top 5 STRONG BUY / BUY recommendations + optional news."""
     if not top_recs:
         return False
 
@@ -279,15 +334,6 @@ def send_daily_digest(
         icon   = icons.get(rstr, "")
         blocks.append({"type": "section", "text": {"type": "mrkdwn",
             "text": f"{icon} *{ticker}* — {rstr}  `{score}/12`\n_{sigs}_"}})
-
-    if rebalancing:
-        blocks.append({"type": "divider"})
-        blocks.append({"type": "section", "text": {"type": "mrkdwn",
-            "text": "*Portfolio rebalancing actions:*"}})
-        for s in rebalancing[:4]:
-            arrow = "↑" if s["action"] == "INCREASE" else "↓"
-            blocks.append({"type": "section", "text": {"type": "mrkdwn",
-                "text": f"{arrow} *{s['sector']}*  {s['current_weight']:.0%} → {s['target_weight']:.0%}  |  {s['rationale']}"}})
 
     blocks.append({"type": "divider"})
     blocks.append({"type": "context", "elements": [
@@ -389,50 +435,278 @@ def send_market_event_alert(
 
 
 def send_daily_news_alert(
-    news_item: dict[str, Any],
+    news_items: "dict[str, Any] | list[dict[str, Any]]",
     channel: str | None = None,
 ) -> bool:
-    """Send the day's single top financial news headline to Slack.
+    """Send institutional investor news articles to Slack with Korean summaries.
 
-    Called by the daily_news scheduler job when the user has enabled the
-    Daily News subscription from the dashboard.
+    Args:
+        news_items: Single article dict (legacy) or list of article dicts.
+                    Each dict may contain 'headline', 'source', 'url',
+                    'published_at', and optionally 'summary_ko'.
+        channel:    Override Slack channel.
     """
     from datetime import datetime  # noqa: PLC0415
 
-    headline = news_item.get("headline", "")
-    source   = news_item.get("source", "")
-    url      = news_item.get("url", "")
-    pub      = news_item.get("published_at", "")
+    # Normalise: accept both a single dict and a list
+    if isinstance(news_items, dict):
+        items: list[dict] = [news_items]
+    else:
+        items = list(news_items)
 
-    if not headline:
+    items = [it for it in items if it.get("headline")]
+    if not items:
         return False
 
-    today     = datetime.utcnow().strftime("%b %d, %Y")
-    head_text = f"<{url}|{headline}>" if url else headline
+    today = datetime.utcnow().strftime("%b %d, %Y")
 
     blocks: list[dict] = [
         {"type": "header", "text": {"type": "plain_text",
-            "text": f"📰 오늘의 금융 뉴스 — {today}", "emoji": True}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": head_text}},
+            "text": f"🏛️ 기관투자자 동향 뉴스 — {today}", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": "_헤지펀드·자산운용사 등 주요 기관투자자의 움직임과 시장 시사점_"}},
+        {"type": "divider"},
     ]
 
-    context_parts = []
-    if source:
-        context_parts.append(f"*출처:* {source}")
-    if pub:
-        context_parts.append(pub)
-    if context_parts:
-        blocks.append({"type": "context", "elements": [
-            {"type": "mrkdwn", "text": "  ·  ".join(context_parts)}
-        ]})
+    for idx, item in enumerate(items[:5], start=1):
+        headline   = item.get("headline", "")
+        source     = item.get("source", "")
+        url        = item.get("url", "")
+        pub        = item.get("published_at", "")
+        summary_ko = item.get("summary_ko", "")
+
+        head_text = f"<{url}|{headline}>" if url else headline
+        body = f"*{idx}.* {head_text}"
+        if summary_ko:
+            body += f"\n📌 _{summary_ko}_"
+
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": body}})
+
+        meta_parts: list[str] = []
+        if source:
+            meta_parts.append(source)
+        if pub:
+            meta_parts.append(pub)
+        if meta_parts:
+            blocks.append({"type": "context", "elements": [
+                {"type": "mrkdwn", "text": "  ·  ".join(meta_parts)}
+            ]})
+
+        if idx < len(items[:5]):
+            blocks.append({"type": "divider"})
 
     blocks.append({"type": "divider"})
     blocks.append({"type": "context", "elements": [
         {"type": "mrkdwn",
-         "text": "📊 WhaleTracker AI Daily News  ·  구독 취소: 대시보드 뉴스 섹션에서 토글 OFF"}
+         "text": "📊 WhaleTracker AI  ·  기관투자자 동향 뉴스  ·  구독 취소: 대시보드 뉴스 섹션에서 토글 OFF"}
     ]})
 
-    text = f"📰 오늘의 금융 뉴스 ({today}): {headline}"
+    first_headline = items[0].get("headline", "")
+    text = f"🏛️ 기관투자자 동향 뉴스 ({today}): {first_headline}"
+    return _post(blocks, text, channel)
+
+
+def send_activist_13d_alert(
+    ticker: str,
+    company: str,
+    filer: str,
+    ownership_pct: float,
+    ai_context: str | None = None,
+    news_items: list[dict[str, Any]] | None = None,
+    channel: str | None = None,
+) -> bool:
+    """Real-time alert when an activist investor files SC 13D (≥5% with intent to influence)."""
+    pct_str = f"{ownership_pct:.1f}%" if ownership_pct else "5%+"
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"🔔 행동주의 투자자 13D — {ticker}", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": (
+                f"*{filer}*이 *{ticker}*"
+                + (f" ({company})" if company else "")
+                + f" 지분 *{pct_str}*를 취득하며 *SC 13D*를 제출했습니다.\n"
+                "_13D는 경영 참여 의도가 있는 적극적 투자 신호입니다._"
+            )}},
+    ]
+
+    if ai_context:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"🤖 *AI 투자 시사점*\n{ai_context}"}})
+
+    blocks.append({"type": "context", "elements": [
+        {"type": "mrkdwn",
+         "text": "⚡ SC 13D = 행동주의 캠페인 · 경영진 교체 · 전략적 변화 요구 가능성"}
+    ]})
+
+    if news_items:
+        blocks.append({"type": "divider"})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*📰 {ticker} 관련 최신 뉴스:*"}})
+        for item in news_items[:3]:
+            url  = item.get("url", "")
+            head = item.get("headline", "")
+            src  = item.get("source", "")
+            line = f"• <{url}|{head}>" if url else f"• {head}"
+            if src:
+                line += f"  _{src}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+
+    blocks.append({"type": "divider"})
+    text = f"🔔 13D Alert: {filer} → {ticker} {pct_str} 취득"
+    return _post(blocks, text, channel)
+
+
+def send_batch_digest(
+    items: list[dict[str, Any]],
+    channel: str | None = None,
+) -> bool:
+    """Daily batch digest for lower-urgency signals: watchlist changes, 13G filings.
+
+    items: list of {"type": "watchlist"|"13g", "data": dict, ...}
+    """
+    if not items:
+        return False
+
+    from datetime import datetime  # noqa: PLC0415
+    today = datetime.utcnow().strftime("%b %d, %Y")
+
+    watchlist_items = [i for i in items if i.get("type") == "watchlist"]
+    passive_13g     = [i for i in items if i.get("type") == "13g"]
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"📋 일일 배치 요약 — {today}", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": "_긴급도 낮은 신호 묶음 (워치리스트 변경 · 패시브 13G 공시)_"}},
+        {"type": "divider"},
+    ]
+
+    if watchlist_items:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*⭐ 워치리스트 점수 변경 ({len(watchlist_items)}건):*"}})
+        icons = {"STRONG BUY": "🚀", "BUY": "✅", "HOLD": "⏸️", "SELL": "🔻"}
+        for item in watchlist_items[:8]:
+            rec       = item.get("data", {})
+            old_score = item.get("old_score", 0)
+            ticker    = rec.get("ticker", "")
+            score     = rec.get("conviction_score", 0)
+            rstr      = rec.get("recommendation", "HOLD")
+            arrow     = "⬆️" if score > old_score else "⬇️"
+            icon      = icons.get(rstr, "")
+            blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                "text": f"{arrow} *{ticker}* {icon} {rstr}  `{old_score}→{score}/12`"}})
+
+    if passive_13g and watchlist_items:
+        blocks.append({"type": "divider"})
+
+    if passive_13g:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*📄 패시브 13G 공시 ({len(passive_13g)}건):*"}})
+        for item in passive_13g[:6]:
+            filing = item.get("data", {})
+            ticker = filing.get("ticker", "")
+            filer  = filing.get("filer", "")
+            pct    = filing.get("ownership_pct", 0)
+            pct_str = f"{pct:.1f}%" if pct else "5%+"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                "text": f"• *{ticker}*  {filer}  {pct_str} 취득 (단순 투자)"}})
+
+    blocks.append({"type": "divider"})
+    blocks.append({"type": "context", "elements": [
+        {"type": "mrkdwn", "text": "📊 WhaleTracker AI  ·  배치 다이제스트 (낮은 긴급도 신호)"}
+    ]})
+
+    text = f"📋 일일 배치 요약 — {len(items)}건 ({today})"
+    return _post(blocks, text, channel)
+
+
+def send_premarket_briefing(
+    top_recs: list[dict[str, Any]],
+    events: list[dict[str, Any]] | None = None,
+    news_items: list[dict[str, Any]] | None = None,
+    channel: str | None = None,
+) -> bool:
+    """Pre-market briefing sent before market open (default 06:00 KST / 21:00 UTC).
+
+    Combines top institutional signals, upcoming market events, and
+    institutional investor news into a single structured morning brief.
+    """
+    from datetime import datetime, date  # noqa: PLC0415
+
+    today_str = datetime.utcnow().strftime("%Y년 %m월 %d일")
+    weekday   = ["월", "화", "수", "목", "금", "토", "일"][date.today().weekday()]
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"🌅 프리마켓 브리핑 — {today_str} ({weekday})", "emoji": True}},
+    ]
+
+    # ── Upcoming events (next 7 days) ─────────────────────────────────────────
+    if events:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": "*📅 향후 7일 주요 이벤트:*"}})
+        type_labels = {
+            "FED_MEETING":     ("🏛️", "FOMC"),
+            "CPI_RELEASE":     ("📊", "CPI"),
+            "JOBS_REPORT":     ("💼", "NFP"),
+            "EARNINGS_SEASON": ("📈", "실적시즌"),
+            "ELECTION":        ("🗳️", "선거"),
+            "DEBT_CEILING":    ("⚠️", "부채한도"),
+        }
+        for ev in events[:5]:
+            ev_date  = ev.get("date")
+            ev_type  = ev.get("type", "")
+            title    = ev.get("title", "")
+            days_left = (ev_date - date.today()).days if ev_date else 0
+            icon, label = type_labels.get(ev_type, ("📅", "이벤트"))
+            urgency = "⚡ 오늘!" if days_left == 0 else (f"D-{days_left}" if days_left > 0 else "")
+            blocks.append({"type": "section", "text": {"type": "mrkdwn",
+                "text": f"{icon} *{title}*  `{label}`  _{urgency}_"}})
+        blocks.append({"type": "divider"})
+
+    # ── Top institutional signals ──────────────────────────────────────────────
+    if top_recs:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": "*🐋 오늘의 주요 기관 신호:*"}})
+        icons_map = {"STRONG BUY": "🚀", "BUY": "✅", "HOLD": "⏸️", "SELL": "🔻"}
+        for rec in top_recs[:5]:
+            ticker = rec.get("ticker", "")
+            score  = rec.get("conviction_score", 0)
+            rstr   = rec.get("recommendation", "HOLD")
+            sigs   = rec.get("signal_summary", "")
+            whales = ", ".join(rec.get("supporting_whales", [])[:2])
+            icon   = icons_map.get(rstr, "")
+            line   = f"{icon} *{ticker}*  {rstr}  `{score}/12`"
+            if whales:
+                line += f"  — _{whales}_"
+            if sigs:
+                line += f"\n  _{sigs}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+        blocks.append({"type": "divider"})
+
+    # ── Institutional news headlines ───────────────────────────────────────────
+    if news_items:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": "*🏛️ 기관투자자 동향 뉴스:*"}})
+        for item in news_items[:3]:
+            url  = item.get("url", "")
+            head = item.get("headline", "")
+            src  = item.get("source", "")
+            summary_ko = item.get("summary_ko", "")
+            line = f"• <{url}|{head}>" if url else f"• {head}"
+            if src:
+                line += f"  _{src}_"
+            if summary_ko:
+                line += f"\n  📌 _{summary_ko}_"
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+
+    blocks.append({"type": "context", "elements": [
+        {"type": "mrkdwn",
+         "text": "📊 WhaleTracker AI  ·  프리마켓 브리핑  ·  장 시작 전 기관 동향 요약"}
+    ]})
+
+    text = f"🌅 프리마켓 브리핑 {today_str} | 신호 {len(top_recs)}건 · 이벤트 {len(events or [])}건"
     return _post(blocks, text, channel)
 
 

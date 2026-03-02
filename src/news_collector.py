@@ -240,6 +240,58 @@ TOPIC_KEYWORDS: dict[str, frozenset[str]] = {
 
 ALL_TOPICS = list(TOPIC_KEYWORDS.keys())
 
+# ── Institutional investor keywords ────────────────────────────────────────────
+# Headlines matching ANY of these are considered "institutional investor news"
+_INSTITUTIONAL_KEYWORDS: frozenset[str] = frozenset([
+    # Filings & regulatory
+    "13f", "13d", "13g", "form 4", "sec filing", "sec disclosed",
+    "activist investor", "activist stake", "activist campaign",
+    # Fund types
+    "hedge fund", "hedge funds", "private equity", "asset manager",
+    "mutual fund", "sovereign wealth", "endowment", "pension fund",
+    "family office", "venture capital",
+    # Whale investors (notable names)
+    "warren buffett", "berkshire hathaway", "bridgewater", "ray dalio",
+    "carl icahn", "bill ackman", "pershing square", "george soros",
+    "tiger global", "david tepper", "appaloosa",
+    "blackrock", "vanguard", "state street", "fidelity",
+    "citadel", "renaissance", "point72", "millennium",
+    "two sigma", "d.e. shaw", "kkr", "apollo global",
+    # Actions
+    "stake", "stake in", "position in", "increased stake",
+    "reduced stake", "built a stake", "disclosed a",
+    "took a position", "exited", "liquidated stake",
+    "new position", "major stake",
+    # Concepts
+    "institutional", "institutional investor", "institutional ownership",
+    "block trade", "dark pool", "smart money",
+    "filing shows", "disclosed holding", "portfolio stake",
+    "concentration", "whale investor",
+])
+
+
+def _is_institutional(headline: str) -> bool:
+    """Return True if the headline is related to institutional investor activity."""
+    h = headline.lower()
+    return any(kw in h for kw in _INSTITUTIONAL_KEYWORDS)
+
+
+def fetch_institutional_news(n: int = 5) -> list[dict[str, Any]]:
+    """Return up to `n` news items specifically about institutional investor activity.
+
+    Fetches a large pool from the general market news cache, then applies the
+    institutional keyword filter.  Falls back to general market news if too few
+    institutional articles are found.
+    """
+    pool = fetch_market_news(max(n * 8, 60))
+    institutional = [item for item in pool if _is_institutional(item["headline"])]
+    if len(institutional) >= n:
+        return institutional[:n]
+    # Not enough institutional news — pad with general market news (no duplicates)
+    seen = {item["headline"] for item in institutional}
+    extras = [item for item in pool if item["headline"] not in seen]
+    return (institutional + extras)[: n]
+
 
 def item_matches_topics(headline: str, topics: list[str]) -> bool:
     """Return True if headline matches ANY of the given topic IDs."""
