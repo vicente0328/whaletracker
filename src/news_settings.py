@@ -27,10 +27,22 @@ logger = logging.getLogger(__name__)
 # Canonical path for file-based persistence (same location used by app.py)
 _FILE: Path = Path(__file__).parent.parent / "daily_news_sub.json"
 
+# ── Env-var defaults ──────────────────────────────────────────────────────────
+# These act as a persistent fallback on Railway where the filesystem is
+# ephemeral (wiped on every redeploy).  Set these once in Railway's environment:
+#   DAILY_NEWS_ENABLED=true
+#   DAILY_NEWS_HOUR_UTC=7      (0-23, UTC hour to send)
+#   DAILY_NEWS_TZ=KST          (display timezone: KST or UTC)
+# The browser localStorage still overrides these on page load, so users can
+# also toggle from the UI.
+_env_enabled  = os.getenv("DAILY_NEWS_ENABLED",  "").lower() in ("1", "true", "yes")
+_env_hour_utc = int(os.getenv("DAILY_NEWS_HOUR_UTC", "23"))
+_env_tz       = os.getenv("DAILY_NEWS_TZ", "KST")
+
 DEFAULTS: dict = {
-    "enabled":  False,
-    "hour_utc": 23,       # default 08:00 KST = 23:00 UTC previous day
-    "timezone": "KST",
+    "enabled":  _env_enabled,
+    "hour_utc": _env_hour_utc,
+    "timezone": _env_tz,
     "topics":   [],
 }
 

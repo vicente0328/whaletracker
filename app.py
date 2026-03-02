@@ -2812,6 +2812,27 @@ app.layout = html.Div([
                     "border": f"1px solid #{C['purple']}22",
                 }),
 
+                # ── Test send button ──────────────────────────────────────
+                html.Div([
+                    html.Button(
+                        "📨 테스트 알림 발송",
+                        id="news-test-send-btn",
+                        n_clicks=0,
+                        style={
+                            "fontSize": "0.75rem", "fontWeight": "700",
+                            "padding": "7px 16px", "borderRadius": "8px",
+                            "cursor": "pointer",
+                            "border": f"1px solid #{C['green']}55",
+                            "background": f"#{C['green']}18",
+                            "color": f"#{C['green']}",
+                        },
+                    ),
+                    html.Span(id="news-test-result", style={
+                        "marginLeft": "10px", "fontSize": "0.73rem",
+                        "color": f"#{C['muted']}",
+                    }),
+                ], style={"marginTop": "12px", "display": "flex", "alignItems": "center"}),
+
             ], style={
                 "background": f"#{C['card']}", "borderRadius": "10px",
                 "padding": "14px 16px", "marginBottom": "6px",
@@ -3044,10 +3065,6 @@ def _bt_period_styles(years):
     State("bt-period-store",  "data"),
     State("bt-capital",       "value"),
     prevent_initial_call=True,
-    running=[
-        (Output("bt-run-btn", "disabled"), True, False),
-        (Output("bt-run-btn", "children"), "⏳ Running…", "▶ Run Backtest"),
-    ],
 )
 def run_bt(n_clicks, years, capital):
     import plotly.graph_objects as go
@@ -3106,176 +3123,182 @@ def run_bt(n_clicks, years, capital):
         ], style={"padding": "1rem", "maxWidth": "520px"})
         return ("N/A",) * 8 + (msg, html.Div())
 
-    m = result.metrics
-    _sgn = lambda v: f"{v:+.1f}%" if v is not None else "—"
-    _pct = lambda v: f"{v:.1f}%"  if v is not None else "—"
-    _r   = lambda v: f"{v:.2f}"   if v is not None else "—"
-    _usd = lambda v: f"${v:,.0f}" if v is not None else "—"
+    try:
+        m = result.metrics
+        _sgn = lambda v: f"{v:+.1f}%" if v is not None else "—"
+        _pct = lambda v: f"{v:.1f}%"  if v is not None else "—"
+        _r   = lambda v: f"{v:.2f}"   if v is not None else "—"
+        _usd = lambda v: f"${v:,.0f}" if v is not None else "—"
 
-    total  = _sgn(m.get("total_return_pct"))
-    alpha  = _sgn(m.get("alpha_pct"))
-    ann    = _sgn(m.get("annualized_return_pct"))
-    dd     = _pct(m.get("max_drawdown_pct"))
-    sharpe = _r(m.get("sharpe_ratio"))
-    win    = _pct(m.get("win_rate_pct"))
-    trades = str(m.get("n_trades", 0))
-    final  = _usd(m.get("final_value"))
+        total  = _sgn(m.get("total_return_pct"))
+        alpha  = _sgn(m.get("alpha_pct"))
+        ann    = _sgn(m.get("annualized_return_pct"))
+        dd     = _pct(m.get("max_drawdown_pct"))
+        sharpe = _r(m.get("sharpe_ratio"))
+        win    = _pct(m.get("win_rate_pct"))
+        trades = str(m.get("n_trades", 0))
+        final  = _usd(m.get("final_value"))
 
-    # ── Portfolio vs SPY chart ─────────────────────────────────────────────
-    port_s  = result.portfolio_series
-    bench_s = result.benchmark_series
+        # ── Portfolio vs SPY chart ─────────────────────────────────────────────
+        port_s  = result.portfolio_series
+        bench_s = result.benchmark_series
 
-    port_pct  = (port_s  / capital - 1) * 100
-    bench_pct = (bench_s / capital - 1) * 100
+        port_pct  = (port_s  / capital - 1) * 100
+        bench_pct = (bench_s / capital - 1) * 100
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=port_pct.index.tolist(), y=port_pct.values.tolist(),
-        name="WhaleTracker", mode="lines",
-        line=dict(color=f"#{C['blue']}", width=2.5),
-        hovertemplate="%{x}<br>%{y:.1f}%<extra>WhaleTracker</extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=bench_pct.index.tolist(), y=bench_pct.values.tolist(),
-        name="SPY", mode="lines",
-        line=dict(color=f"#{C['muted']}", width=1.5, dash="dot"),
-        hovertemplate="%{x}<br>%{y:.1f}%<extra>SPY</extra>",
-    ))
-    # Rebalancing markers — use QuarterSnapshot.signal_date (dataclass attribute)
-    for ql in result.quarterly_log:
-        fig.add_vline(
-            x=ql.signal_date, line_width=1,
-            line_dash="dot", line_color=f"#{C['border']}",
-        )
-
-    # Signal data provenance note
-    src_note = ""
-    if result.signals_source:
-        try:
-            ts = datetime.fromisoformat(result.signals_source.replace("Z", "+00:00"))
-            src_note = f"시그널 계산: {ts.strftime('%Y-%m-%d %H:%M')} UTC"
-        except Exception:
-            src_note = f"시그널 계산: {result.signals_source[:16]}"
-
-    fig.update_layout(
-        paper_bgcolor=f"#{C['card']}",
-        plot_bgcolor=f"#{C['card']}",
-        font=dict(family="Inter, sans-serif", color=f"#{C['text']}"),
-        margin=dict(l=10, r=10, t=30 if src_note else 10, b=10),
-        title=dict(
-            text=src_note, font=dict(size=10, color=f"#{C['muted']}"),
-            x=0.99, xanchor="right",
-        ) if src_note else None,
-        legend=dict(
-            orientation="h", x=0.01, y=0.99,
-            bgcolor="rgba(0,0,0,0)",
-            font=dict(size=11, color=f"#{C['muted']}"),
-        ),
-        xaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
-                   linecolor=f"#{C['border']}"),
-        yaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
-                   linecolor=f"#{C['border']}", ticksuffix="%"),
-        hovermode="x unified",
-        height=360,
-    )
-    chart = dcc.Graph(figure=fig, config={"displayModeBar": False},
-                      style={"borderRadius": "12px", "overflow": "hidden",
-                             "border": f"1px solid #{C['border']}"})
-
-    # ── Quarterly rebalancing log ──────────────────────────────────────────
-    q_log_table = html.Div()
-    if result.quarterly_log:
-        _qth = lambda label: html.Th(label, style={
-            "padding": "6px 10px", "fontSize": "0.63rem", "fontWeight": "700",
-            "color": f"#{C['muted']}", "textAlign": "left",
-            "textTransform": "uppercase", "letterSpacing": "0.06em",
-            "borderBottom": f"1px solid #{C['border']}",
-        })
-        _qtd = lambda val, color=None: html.Td(val, style={
-            "padding": "5px 10px", "fontSize": "0.73rem",
-            "color": f"#{color or C['text']}", "verticalAlign": "top",
-        })
-        q_rows = []
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=port_pct.index.tolist(), y=port_pct.values.tolist(),
+            name="WhaleTracker", mode="lines",
+            line=dict(color=f"#{C['blue']}", width=2.5),
+            hovertemplate="%{x}<br>%{y:.1f}%<extra>WhaleTracker</extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=bench_pct.index.tolist(), y=bench_pct.values.tolist(),
+            name="SPY", mode="lines",
+            line=dict(color=f"#{C['muted']}", width=1.5, dash="dot"),
+            hovertemplate="%{x}<br>%{y:.1f}%<extra>SPY</extra>",
+        ))
         for ql in result.quarterly_log:
-            sb_str = "  ".join(ql.strong_buys[:10])
-            held   = "  ".join(ql.holdings[:10])
-            q_rows.append(html.Tr([
-                _qtd(ql.label,       C["amber"]),
-                _qtd(ql.report_date, C["muted"]),
-                _qtd(ql.signal_date, C["muted"]),
-                _qtd(f"{len(ql.strong_buys)} tickers", C["green"]),
-                _qtd(sb_str or "—"),
-                _qtd(f"${ql.port_value:,.0f}", C["blue"]),
-            ]))
-        q_header = html.Tr([
-            _qth("Quarter"), _qth("Report Date"), _qth("Signal Date"),
-            _qth("Strong Buys"), _qth("Tickers"), _qth("Port. Value"),
-        ])
-        q_log_table = html.Div([
-            html.Div("분기별 리밸런싱 기록", style={
-                "fontSize": "0.78rem", "fontWeight": "700",
-                "color": f"#{C['text']}", "marginBottom": "8px",
-            }),
-            html.Div(
-                html.Table(
-                    [html.Thead(q_header), html.Tbody(q_rows)],
-                    style={"width": "100%", "borderCollapse": "collapse"},
+            fig.add_vline(
+                x=ql.signal_date, line_width=1,
+                line_dash="dot", line_color=f"#{C['border']}",
+            )
+
+        src_note = ""
+        if result.signals_source:
+            try:
+                ts = datetime.fromisoformat(result.signals_source.replace("Z", "+00:00"))
+                src_note = f"시그널 계산: {ts.strftime('%Y-%m-%d %H:%M')} UTC"
+            except Exception:
+                src_note = f"시그널 계산: {result.signals_source[:16]}"
+
+        fig.update_layout(
+            paper_bgcolor=f"#{C['card']}",
+            plot_bgcolor=f"#{C['card']}",
+            font=dict(family="Inter, sans-serif", color=f"#{C['text']}"),
+            margin=dict(l=10, r=10, t=30 if src_note else 10, b=10),
+            title=dict(
+                text=src_note, font=dict(size=10, color=f"#{C['muted']}"),
+                x=0.99, xanchor="right",
+            ) if src_note else {},
+            legend=dict(
+                orientation="h", x=0.01, y=0.99,
+                bgcolor="rgba(0,0,0,0)",
+                font=dict(size=11, color=f"#{C['muted']}"),
+            ),
+            xaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
+                       linecolor=f"#{C['border']}"),
+            yaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
+                       linecolor=f"#{C['border']}", ticksuffix="%"),
+            hovermode="x unified",
+            height=360,
+        )
+        chart = dcc.Graph(figure=fig, config={"displayModeBar": False},
+                          style={"borderRadius": "12px", "overflow": "hidden",
+                                 "border": f"1px solid #{C['border']}"})
+
+        # ── Quarterly rebalancing log ──────────────────────────────────────────
+        q_log_table = html.Div()
+        if result.quarterly_log:
+            _qth = lambda label: html.Th(label, style={
+                "padding": "6px 10px", "fontSize": "0.63rem", "fontWeight": "700",
+                "color": f"#{C['muted']}", "textAlign": "left",
+                "textTransform": "uppercase", "letterSpacing": "0.06em",
+                "borderBottom": f"1px solid #{C['border']}",
+            })
+            _qtd = lambda val, color=None: html.Td(val, style={
+                "padding": "5px 10px", "fontSize": "0.73rem",
+                "color": f"#{color or C['text']}", "verticalAlign": "top",
+            })
+            q_rows = []
+            for ql in result.quarterly_log:
+                sb_str = "  ".join(ql.strong_buys[:10])
+                q_rows.append(html.Tr([
+                    _qtd(ql.label,       C["amber"]),
+                    _qtd(ql.report_date, C["muted"]),
+                    _qtd(ql.signal_date, C["muted"]),
+                    _qtd(f"{len(ql.strong_buys)} tickers", C["green"]),
+                    _qtd(sb_str or "—"),
+                    _qtd(f"${ql.port_value:,.0f}", C["blue"]),
+                ]))
+            q_header = html.Tr([
+                _qth("Quarter"), _qth("Report Date"), _qth("Signal Date"),
+                _qth("Strong Buys"), _qth("Tickers"), _qth("Port. Value"),
+            ])
+            q_log_table = html.Div([
+                html.Div("분기별 리밸런싱 기록", style={
+                    "fontSize": "0.78rem", "fontWeight": "700",
+                    "color": f"#{C['text']}", "marginBottom": "8px",
+                }),
+                html.Div(
+                    html.Table(
+                        [html.Thead(q_header), html.Tbody(q_rows)],
+                        style={"width": "100%", "borderCollapse": "collapse"},
+                    ),
+                    style={"overflowX": "auto"},
                 ),
-                style={"overflowX": "auto"},
-            ),
-        ], style={
-            "background": f"#{C['card']}", "borderRadius": "12px",
-            "border": f"1px solid #{C['border']}", "padding": "1rem",
-            "marginBottom": "1rem",
-        })
+            ], style={
+                "background": f"#{C['card']}", "borderRadius": "12px",
+                "border": f"1px solid #{C['border']}", "padding": "1rem",
+                "marginBottom": "1rem",
+            })
 
-    # ── Individual trade log ───────────────────────────────────────────────
-    buy_trades = [t for t in result.trades if t.action == "BUY"]
-    trade_table = html.Div()
-    if buy_trades:
-        _th = lambda label: html.Th(label, style={
-            "padding": "6px 12px", "fontSize": "0.63rem", "fontWeight": "700",
-            "color": f"#{C['muted']}", "textAlign": "left",
-            "textTransform": "uppercase", "letterSpacing": "0.06em",
-            "borderBottom": f"1px solid #{C['border']}",
-        })
-        _td = lambda val, color=None: html.Td(val, style={
-            "padding": "5px 12px", "fontSize": "0.73rem",
-            "color": f"#{color or C['text']}", "whiteSpace": "nowrap",
-        })
-        rows = []
-        for t in buy_trades[-60:]:
-            rec_color = C["green"] if "STRONG" in t.signal else C["blue"]
-            rows.append(html.Tr([
-                _td(t.date,             C["muted"]),
-                _td(t.ticker,           C["blue"]),
-                _td(t.company[:26]),
-                _td(t.signal,           rec_color),
-                _td(f"{t.score:.1f}",   C["amber"]),
-                _td(f"${t.price:,.2f}"),
-                _td(f"${t.value:,.0f}", C["green"]),
-            ]))
-        header = html.Tr([
-            _th("Date"), _th("Ticker"), _th("Company"),
-            _th("Signal"), _th("Score"), _th("Price"), _th("Value"),
-        ])
-        trade_table = html.Div([
-            html.Div("매수 내역 (최근 60건)", style={
-                "fontSize": "0.78rem", "fontWeight": "700",
-                "color": f"#{C['text']}", "marginBottom": "8px",
-            }),
-            html.Div(
-                html.Table([html.Thead(header), html.Tbody(rows)],
-                           style={"width": "100%", "borderCollapse": "collapse"}),
-                style={"overflowX": "auto"},
-            ),
-        ], style={
-            "background": f"#{C['card']}", "borderRadius": "12px",
-            "border": f"1px solid #{C['border']}", "padding": "1rem",
-        })
+        # ── Individual trade log ───────────────────────────────────────────────
+        buy_trades = [t for t in result.trades if t.action == "BUY"]
+        trade_table = html.Div()
+        if buy_trades:
+            _th = lambda label: html.Th(label, style={
+                "padding": "6px 12px", "fontSize": "0.63rem", "fontWeight": "700",
+                "color": f"#{C['muted']}", "textAlign": "left",
+                "textTransform": "uppercase", "letterSpacing": "0.06em",
+                "borderBottom": f"1px solid #{C['border']}",
+            })
+            _td = lambda val, color=None: html.Td(val, style={
+                "padding": "5px 12px", "fontSize": "0.73rem",
+                "color": f"#{color or C['text']}", "whiteSpace": "nowrap",
+            })
+            rows = []
+            for t in buy_trades[-60:]:
+                rec_color = C["green"] if "STRONG" in t.signal else C["blue"]
+                rows.append(html.Tr([
+                    _td(t.date,             C["muted"]),
+                    _td(t.ticker,           C["blue"]),
+                    _td(t.company[:26]),
+                    _td(t.signal,           rec_color),
+                    _td(f"{t.score:.1f}",   C["amber"]),
+                    _td(f"${t.price:,.2f}"),
+                    _td(f"${t.value:,.0f}", C["green"]),
+                ]))
+            header = html.Tr([
+                _th("Date"), _th("Ticker"), _th("Company"),
+                _th("Signal"), _th("Score"), _th("Price"), _th("Value"),
+            ])
+            trade_table = html.Div([
+                html.Div("매수 내역 (최근 60건)", style={
+                    "fontSize": "0.78rem", "fontWeight": "700",
+                    "color": f"#{C['text']}", "marginBottom": "8px",
+                }),
+                html.Div(
+                    html.Table([html.Thead(header), html.Tbody(rows)],
+                               style={"width": "100%", "borderCollapse": "collapse"}),
+                    style={"overflowX": "auto"},
+                ),
+            ], style={
+                "background": f"#{C['card']}", "borderRadius": "12px",
+                "border": f"1px solid #{C['border']}", "padding": "1rem",
+            })
 
-    log_section = html.Div([q_log_table, trade_table])
-    return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section
+        log_section = html.Div([q_log_table, trade_table])
+        return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section
+
+    except Exception as exc:
+        logger.error("Backtest render failed: %s", exc, exc_info=True)
+        err = html.Div(
+            f"렌더링 오류: {exc}",
+            style={"color": f"#{C['red']}", "padding": "1rem", "fontSize": "0.85rem"},
+        )
+        return ("ERR",) * 8 + (err, html.Div())
 
 
 # ── CALLBACKS ──────────────────────────────────────────────────────────────────
@@ -3593,6 +3616,29 @@ def toggle_settings_panel(n_clicks, is_open):
 )
 def sync_settings_open_state(n_clicks, is_open):
     return not bool(is_open)
+
+
+@app.callback(
+    Output("news-test-result", "children"),
+    Input("news-test-send-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def send_test_slack_news(n_clicks):
+    """Immediately send a test Daily News Slack alert."""
+    if not n_clicks:
+        return ""
+    try:
+        from src.news_collector import fetch_market_news      # noqa: PLC0415
+        from src.slack_notifier import send_daily_news_alert  # noqa: PLC0415
+        items = fetch_market_news(5)
+        if not items:
+            return "⚠ 뉴스 데이터 없음"
+        send_daily_news_alert(items[0])
+        headline = items[0].get("headline", "")[:40]
+        return f"✓ 발송 완료 — {headline}…"
+    except Exception as exc:
+        logger.error("Test Slack news failed: %s", exc, exc_info=True)
+        return f"✗ 오류: {exc}"
 
 
 # ── AUTH CALLBACKS ──────────────────────────────────────────────────────────────
