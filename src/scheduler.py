@@ -128,18 +128,22 @@ def start(app_data: dict[str, Any]) -> None:
     )
 
     # ── Real-time Form 4 polling (runs more frequently than full refresh) ───
-    if FORM4_WATCH_TICKERS:
-        _scheduler.add_job(
-            _realtime_form4_job,
-            trigger="interval",
-            minutes=FORM4_REFRESH_MINUTES,
-            id="form4_realtime",
-            replace_existing=True,
-        )
-        logger.info(
-            "Form 4 real-time polling — %d tickers, every %d min",
-            len(FORM4_WATCH_TICKERS), FORM4_REFRESH_MINUTES,
-        )
+    # Always registered — uses FORM4_WATCH_TICKERS env var if set,
+    # otherwise falls back to all tickers in current whale holdings.
+    _scheduler.add_job(
+        _realtime_form4_job,
+        trigger="interval",
+        minutes=FORM4_REFRESH_MINUTES,
+        id="form4_realtime",
+        replace_existing=True,
+        kwargs={"app_data": app_data},
+    )
+    logger.info(
+        "Form 4 real-time polling — every %d min (watch list: %s)",
+        FORM4_REFRESH_MINUTES,
+        ", ".join(FORM4_WATCH_TICKERS[:5]) + ("…" if len(FORM4_WATCH_TICKERS) > 5 else "")
+        if FORM4_WATCH_TICKERS else "whale holdings (auto)",
+    )
 
     _scheduler.start()
     logger.info(
@@ -232,12 +236,38 @@ def _refresh_and_alert(app_data: dict[str, Any]) -> None:
     logger.info("[scheduler] Refresh complete — %d recommendations", len(new_recs))
 
 
-def _realtime_form4_job() -> None:
-    """Poll EDGAR for new Form 4 filings on watched tickers and fire per-transaction alerts."""
-    if not FORM4_WATCH_TICKERS:
+_MIN_VALUE_BUY  = 100_000   # alert on insider buys ≥ $100K
+_MIN_VALUE_SELL = 500_000   # alert on insider sells ≥ $500K (noise filter)
+
+
+def _realtime_form4_job(app_data: dict[str, Any] | None = None) -> None:
+    """Poll EDGAR for new Form 4 filings and fire per-transaction Slack alerts.
+
+    Watch-ticker priority:
+      1. FORM4_WATCH_TICKERS env var (explicit list)
+      2. ALERT_WATCHLIST env var
+      3. All tickers currently held by tracked whales (auto, capped at 60)
+
+    Signal filters applied:
+      • PLANNED_SELL (10b5-1 pre-arranged) → skipped (low informational value)
+      • INSIDER_BUY  → alert if value ≥ $100K
+      • INSIDER_SELL → alert if value ≥ $500K
+    """
+    # Resolve effective watch list
+    effective: list[str] = FORM4_WATCH_TICKERS
+    if not effective and app_data:
+        effective = sorted({
+            h.get("ticker", "")
+            for holds in app_data.get("filings", {}).values()
+            for h in holds
+            if h.get("ticker")
+        })[:60]   # cap to avoid excessive EDGAR requests
+
+    if not effective:
+        logger.debug("[scheduler] Form 4 poll skipped — no tickers to watch")
         return
 
-    logger.info("[scheduler] Form 4 poll — %d tickers", len(FORM4_WATCH_TICKERS))
+    logger.info("[scheduler] Form 4 poll — %d tickers", len(effective))
     try:
         from src.data_collector import fetch_recent_form4_filings  # noqa: PLC0415
         from src.slack_notifier import send_form4_realtime_alert   # noqa: PLC0415
@@ -246,7 +276,7 @@ def _realtime_form4_job() -> None:
         return
 
     try:
-        txs = fetch_recent_form4_filings(FORM4_WATCH_TICKERS, hours_back=2)
+        txs = fetch_recent_form4_filings(effective, hours_back=2)
     except Exception as exc:
         logger.error("[scheduler] Form 4 fetch error: %s", exc)
         return
@@ -258,9 +288,18 @@ def _realtime_form4_job() -> None:
             continue
         _form4_seen_accessions.add(acc)
 
-        signal = tx.get("signal", "")
-        # Alert on buys always; alert on sells only if not pre-planned
-        if signal not in {"INSIDER_BUY", "INSIDER_SELL", "PLANNED_SELL"}:
+        signal    = tx.get("signal", "")
+        value_usd = tx.get("value_usd", 0.0)
+        is_10b51  = tx.get("is_10b51", False)
+
+        # Skip pre-planned 10b5-1 sales — lower informational value
+        if signal == "PLANNED_SELL" or is_10b51:
+            continue
+        if signal == "INSIDER_BUY" and value_usd < _MIN_VALUE_BUY:
+            continue
+        if signal == "INSIDER_SELL" and value_usd < _MIN_VALUE_SELL:
+            continue
+        if signal not in {"INSIDER_BUY", "INSIDER_SELL"}:
             continue
 
         ticker = tx.get("ticker", "")
@@ -272,8 +311,8 @@ def _realtime_form4_job() -> None:
                 role      = tx.get("role", ""),
                 signal    = signal,
                 shares    = tx.get("shares", 0),
-                value_usd = tx.get("value_usd", 0.0),
-                is_10b51  = tx.get("is_10b51", False),
+                value_usd = value_usd,
+                is_10b51  = False,
             )
             new_alerts += 1
         except Exception as exc:

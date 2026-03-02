@@ -301,6 +301,212 @@ MARKET_EVENTS: list[dict[str, Any]] = [
         ),
         "impact": "HIGH",
     },
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # 2026 events
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ── 2026 FOMC meetings (remaining) ─────────────────────────────────────
+    {
+        "date": date(2026, 6, 17),
+        "type": "FED_MEETING",
+        "title": "FOMC Rate Decision — June 2026",
+        "description": "6월 FOMC. SEP·점도표 포함, 2026년 하반기 통화정책 방향을 갱신합니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 7, 29),
+        "type": "FED_MEETING",
+        "title": "FOMC Rate Decision — July 2026",
+        "description": "7월 FOMC 결과 발표. SEP 없음, 성명서·파월 의장 기자회견이 핵심입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 9, 16),
+        "type": "FED_MEETING",
+        "title": "FOMC Rate Decision — September 2026",
+        "description": "9월 FOMC. SEP·점도표 포함, 연말 금리 경로의 핵심 지표가 공개됩니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 10, 28),
+        "type": "FED_MEETING",
+        "title": "FOMC Rate Decision — October 2026",
+        "description": "10월 FOMC. 4분기 경제지표와 연말 정책 방향, 중간선거 이후 첫 FOMC입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 12, 9),
+        "type": "FED_MEETING",
+        "title": "FOMC Rate Decision — December 2026",
+        "description": "연말 FOMC. 2026년 마지막 금리 결정이자 2027년 통화정책 방향을 제시합니다. SEP 및 점도표 포함.",
+        "impact": "HIGH",
+    },
+
+    # ── 2026 CPI releases (2nd Wednesday of each month, approximate) ────────
+    {
+        "date": date(2026, 3, 11),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — February 2026",
+        "description": "미국 2월 소비자물가지수 발표. 3월 FOMC를 앞둔 핵심 인플레이션 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 4, 10),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — March 2026",
+        "description": "미국 3월 CPI 발표. 1분기 인플레이션 확정 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 5, 13),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — April 2026",
+        "description": "미국 4월 CPI 발표. 5월 FOMC 이후 첫 물가 지표입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 6, 10),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — May 2026",
+        "description": "미국 5월 CPI 발표. 6월 FOMC 전 핵심 인플레이션 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 7, 14),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — June 2026 (반기 합산)",
+        "description": "미국 6월 CPI. 2026년 상반기 인플레이션 추이를 마무리합니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 8, 12),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — July 2026",
+        "description": "미국 7월 CPI 발표. 9월 FOMC 전 두 번째 핵심 물가 지표입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 9, 9),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — August 2026",
+        "description": "미국 8월 CPI. 9월 FOMC 직전 발표되는 마지막 물가 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 10, 14),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — September 2026",
+        "description": "미국 9월 CPI 발표. 중간선거 전 마지막 주요 인플레이션 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 11, 12),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — October 2026",
+        "description": "미국 10월 CPI 발표. 중간선거 직후, 12월 FOMC를 앞둔 핵심 지표입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 12, 9),
+        "type": "CPI_RELEASE",
+        "title": "US CPI — November 2026",
+        "description": "미국 11월 CPI. 12월 FOMC 당일 발표, 연말 금리 결정에 즉각 반영됩니다.",
+        "impact": "HIGH",
+    },
+
+    # ── 2026 Non-Farm Payrolls (1st Friday of each month, approximate) ──────
+    {
+        "date": date(2026, 3, 6),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — February 2026",
+        "description": "미국 2월 비농업 고용 지표. 3월 FOMC 전 마지막 고용 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 4, 3),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — March 2026",
+        "description": "미국 3월 비농업 고용 지표 발표. 1분기 노동시장 상황을 확정합니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 5, 1),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — April 2026",
+        "description": "미국 4월 고용 지표. 5월 FOMC 직전 발표되는 핵심 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 6, 5),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — May 2026",
+        "description": "미국 5월 비농업 고용 지표 발표.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 7, 2),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — June 2026",
+        "description": "미국 6월 고용 지표. 독립기념일 연휴 직전 발표, 변동성 주의.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 8, 7),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — July 2026",
+        "description": "미국 7월 비농업 고용 지표. 9월 FOMC 전 핵심 고용 데이터입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 9, 4),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — August 2026",
+        "description": "미국 8월 고용 지표. 9월 FOMC 전 마지막 고용 확인입니다.",
+        "impact": "HIGH",
+    },
+    {
+        "date": date(2026, 10, 2),
+        "type": "JOBS_REPORT",
+        "title": "Non-Farm Payrolls — September 2026",
+        "description": "미국 9월 비농업 고용 지표. 중간선거 직전 발표, 정치적 주목도 높음.",
+        "impact": "HIGH",
+    },
+
+    # ── 2026 Earnings Seasons ───────────────────────────────────────────────
+    {
+        "date": date(2026, 4, 10),
+        "type": "EARNINGS_SEASON",
+        "title": "Q1 2026 Earnings Season 시작",
+        "description": (
+            "S&P 500 기업들의 2026년 1분기 실적 발표 시즌. "
+            "연초 관세·금리 변동 영향이 처음으로 실적에 반영됩니다. "
+            "AI 인프라 지출 vs 수익화 진행상황이 핵심 관전 포인트입니다."
+        ),
+        "impact": "MEDIUM",
+    },
+    {
+        "date": date(2026, 7, 10),
+        "type": "EARNINGS_SEASON",
+        "title": "Q2 2026 Earnings Season 시작",
+        "description": (
+            "2026년 2분기 실적 시즌. "
+            "중간선거를 앞두고 기업들의 정책 불확실성 언급이 시장 반응에 영향을 줄 수 있습니다."
+        ),
+        "impact": "MEDIUM",
+    },
+    {
+        "date": date(2026, 10, 9),
+        "type": "EARNINGS_SEASON",
+        "title": "Q3 2026 Earnings Season 시작",
+        "description": (
+            "3분기 실적 시즌. 중간선거(11/3) 직전 발표되어 섹터별 정책 민감도가 높습니다."
+        ),
+        "impact": "MEDIUM",
+    },
+
+    # ── 2026 US Midterm Elections ───────────────────────────────────────────
+    # (already in calendar above — date(2026, 11, 3))
 ]
 
 
