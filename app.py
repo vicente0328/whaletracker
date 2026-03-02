@@ -3027,6 +3027,9 @@ app.layout = html.Div([
 
         # News banner (loaded asynchronously after page load)
         html.Div(id="news-banner"),
+
+        # Institutional intel banner (loaded together with news banner)
+        html.Div(id="inst-intel-banner"),
     ]),
     dcc.Interval(id="news-load-trigger", interval=100, max_intervals=1, n_intervals=0),
 
@@ -3050,6 +3053,8 @@ app.layout = html.Div([
                 className="tab", selected_className="tab-active"),
         dcc.Tab(label="⏱  Backtest",        value="tab-backtest",
                 className="tab", selected_className="tab-active"),
+        dcc.Tab(label="🦍  Apes",           value="tab-apes",
+                className="tab", selected_className="tab-active"),
     ]),
 
     html.Div(id="tab-content", style={"paddingTop": "1.2rem"}),
@@ -3064,6 +3069,529 @@ app.layout = html.Div([
     html.Button(id="google-cred-trigger", n_clicks=0, style={"display": "none"}),
 
 ], className="app-shell")
+
+
+# ── APES TAB ───────────────────────────────────────────────────────────────────
+
+def _time_ago(created_utc: int) -> str:
+    """Unix timestamp → '3시간 전' / '2일 전' 형식 문자열."""
+    import time as _time  # noqa: PLC0415
+    delta = int(_time.time()) - int(created_utc)
+    if delta < 60:     return "방금 전"
+    if delta < 3600:   return f"{delta // 60}분 전"
+    if delta < 86400:  return f"{delta // 3600}시간 전"
+    return f"{delta // 86400}일 전"
+
+
+def _sub_badge(sub: str) -> html.Span:
+    """서브레딧 이름 배지."""
+    _colors = {
+        "wallstreetbets":   C["purple"],
+        "stocks":           C["blue"],
+        "SecurityAnalysis": C["amber"],
+    }
+    col   = _colors.get(sub, C["muted"])
+    label = "WSB" if sub == "wallstreetbets" else sub[:14]
+    return html.Span(label, style={
+        "fontSize": "0.65rem", "fontWeight": "700",
+        "color": f"#{col}", "border": f"1px solid #{col}60",
+        "borderRadius": "4px", "padding": "1px 6px",
+    })
+
+
+def _flair_badge(flair: str | None) -> html.Span | None:
+    """DD flair 배지 (없으면 None)."""
+    if not flair:
+        return None
+    return html.Span(flair, style={
+        "fontSize": "0.65rem", "fontWeight": "700",
+        "color": f"#{C['amber']}", "border": f"1px solid #{C['amber']}60",
+        "borderRadius": "4px", "padding": "1px 6px",
+    })
+
+
+def _ticker_chip(ticker: str) -> html.Span:
+    """$TICKER 칩."""
+    return html.Span(f"${ticker}", style={
+        "fontSize": "0.68rem", "fontWeight": "700",
+        "color": f"#{C['blue']}", "border": f"1px solid #{C['blue']}60",
+        "borderRadius": "4px", "padding": "1px 6px",
+    })
+
+
+def _whale_badge_apes(ticker: str, whale_map: dict) -> html.Span | None:
+    """고래 13F 추천 배지 (whale_map에 해당 ticker 없으면 None)."""
+    info = whale_map.get(ticker)
+    if not info or not info.get("whale_rec"):
+        return None
+    rec = info["whale_rec"]
+    ri  = REC.get(rec, {})
+    col = ri.get("color", C["muted"]) if ri else C["muted"]
+    return html.Span(f"🐋 {rec}", style={
+        "fontSize": "0.65rem", "fontWeight": "700",
+        "color": f"#{col}", "border": f"1px solid #{col}60",
+        "borderRadius": "4px", "padding": "1px 6px",
+    })
+
+
+def _sentiment_color(sentiment: float) -> str:
+    if sentiment >  0.2: return C["green"]
+    if sentiment < -0.2: return C["red"]
+    return C["amber"]
+
+
+# ── Apes Render Helpers ──────────────────────────────────────────────────────
+
+def _render_hot_tickers(ticker_sents: dict) -> html.Div:
+    """업보트 가중 멘션 기준 상위 8개 티커 랭킹."""
+    if not ticker_sents:
+        return html.Div("데이터 없음", style={"color": f"#{C['muted']}", "fontSize": "0.8rem"})
+
+    ranked = sorted(ticker_sents.items(), key=lambda x: x[1]["total_upvotes"], reverse=True)[:8]
+    max_up  = ranked[0][1]["total_upvotes"] if ranked else 1
+
+    rows = []
+    for rank, (ticker, s) in enumerate(ranked, 1):
+        up      = s["total_upvotes"]
+        bar_pct = max(2, int(up / max_up * 100)) if max_up else 2
+        sent    = s.get("avg_sentiment", 0.0)
+        dot_col = _sentiment_color(sent)
+
+        rows.append(html.Div([
+            html.Span(f"#{rank}", style={
+                "fontSize": "0.68rem", "fontWeight": "700",
+                "color": f"#{C['amber']}", "width": "24px",
+                "flexShrink": "0",
+            }),
+            html.Span(f"${ticker}", style={
+                "fontSize": "0.82rem", "fontWeight": "800",
+                "color": f"#{C['text']}", "width": "54px",
+                "flexShrink": "0",
+            }),
+            html.Div([
+                html.Div(style={
+                    "width": f"{bar_pct}%", "height": "6px",
+                    "background": f"#{C['blue']}",
+                    "borderRadius": "3px",
+                }),
+            ], style={
+                "flex": "1", "background": f"#{C['card2']}",
+                "borderRadius": "3px", "overflow": "hidden",
+            }),
+            html.Span(
+                f"▲ {up:,}",
+                style={"fontSize": "0.68rem", "color": f"#{C['muted']}",
+                       "marginLeft": "6px", "flexShrink": "0"},
+            ),
+            html.Span(
+                f"×{s['mention_count']}",
+                style={"fontSize": "0.65rem", "color": f"#{C['muted']}",
+                       "marginLeft": "4px", "flexShrink": "0"},
+            ),
+            html.Span("●", style={
+                "fontSize": "0.6rem", "color": f"#{dot_col}",
+                "marginLeft": "4px", "flexShrink": "0",
+            }),
+        ], style={"display": "flex", "alignItems": "center", "gap": "4px",
+                  "marginBottom": "6px"}))
+
+    return html.Div(rows)
+
+
+def _render_sentiment_bars(ticker_sents: dict) -> html.Div:
+    """상위 3개 강세 + 상위 3개 약세 bipolar 감성 바."""
+    if not ticker_sents:
+        return html.Div("데이터 없음", style={"color": f"#{C['muted']}", "fontSize": "0.8rem"})
+
+    sorted_all = sorted(ticker_sents.items(), key=lambda x: x[1]["avg_sentiment"], reverse=True)
+    bull_3  = [x for x in sorted_all if x[1]["avg_sentiment"] >  0.0][:3]
+    bear_3  = [x for x in sorted_all if x[1]["avg_sentiment"] <= 0.0][-3:][::-1]
+    selected = bull_3 + bear_3
+
+    rows = []
+    for ticker, s in selected:
+        sent     = s["avg_sentiment"]
+        pct      = abs(sent) * 100
+        bar_col  = C["green"] if sent > 0 else C["red"]
+        sign     = "+" if sent > 0 else ""
+        rows.append(html.Div([
+            html.Span(f"${ticker}", style={
+                "fontSize": "0.76rem", "fontWeight": "700",
+                "color": f"#{C['text']}", "width": "54px", "flexShrink": "0",
+            }),
+            html.Div([
+                html.Div(style={
+                    "width": f"{pct:.0f}%", "height": "8px",
+                    "background": f"#{bar_col}",
+                    "borderRadius": "4px",
+                }),
+            ], style={
+                "flex": "1", "background": f"#{C['card2']}",
+                "borderRadius": "4px", "overflow": "hidden",
+            }),
+            html.Span(f"{sign}{sent:.2f}", style={
+                "fontSize": "0.7rem", "fontWeight": "700",
+                "color": f"#{bar_col}", "marginLeft": "8px",
+                "width": "40px", "textAlign": "right", "flexShrink": "0",
+            }),
+        ], style={"display": "flex", "alignItems": "center",
+                  "gap": "6px", "marginBottom": "8px"}))
+
+    if not rows:
+        return html.Div("데이터 없음", style={"color": f"#{C['muted']}", "fontSize": "0.8rem"})
+    return html.Div(rows)
+
+
+_ALIGN_CATS = {
+    "aligned_bull": {"color": "green",  "icon": "🤝", "label": "합의 매수",
+                     "desc": "고래 + 개미 모두 강세"},
+    "divergence":   {"color": "amber",  "icon": "⚡", "label": "역발상 신호",
+                     "desc": "고래↑ · 개미↓ — 컨트라리안 기회"},
+    "hype_trap":    {"color": "red",    "icon": "🚨", "label": "하이프 트랩",
+                     "desc": "기관 미포지션 · 개미 과열"},
+    "aligned_bear": {"color": "muted",  "icon": "📉", "label": "합의 약세",
+                     "desc": "고래 + 개미 모두 부정적"},
+}
+
+
+def _render_alignment(alignment: dict) -> html.Div:
+    """Whale-Retail 교차 분석 4개 카테고리."""
+    sections = []
+    for cat_key, meta in _ALIGN_CATS.items():
+        items   = alignment.get(cat_key, [])
+        col_key = meta["color"]
+        col     = C.get(col_key, C["muted"])
+
+        if items:
+            ticker_rows = []
+            for it in items[:3]:
+                sent    = it.get("avg_sentiment", 0.0)
+                sign    = "+" if sent >= 0 else ""
+                w_rec   = it.get("whale_rec") or "—"
+                up      = it.get("total_upvotes", 0)
+                ticker_rows.append(html.Div([
+                    html.Span(f"${it['ticker']}", style={
+                        "fontWeight": "800", "fontSize": "0.78rem",
+                        "color": f"#{C['text']}", "marginRight": "6px",
+                    }),
+                    html.Span(f"🐋 {w_rec}", style={
+                        "fontSize": "0.62rem", "color": f"#{C['muted']}",
+                    }),
+                    html.Span(f"개미 {sign}{sent:.2f}", style={
+                        "fontSize": "0.62rem",
+                        "color": f"#{_sentiment_color(sent)}",
+                        "marginLeft": "6px",
+                    }),
+                    html.Span(f"▲{up:,}", style={
+                        "fontSize": "0.6rem", "color": f"#{C['muted']}",
+                        "marginLeft": "auto",
+                    }),
+                ], style={"display": "flex", "alignItems": "center",
+                          "padding": "4px 0",
+                          "borderBottom": f"1px solid #{C['border']}"}))
+            content = html.Div(ticker_rows)
+        else:
+            content = html.Div("—", style={
+                "fontSize": "0.78rem", "color": f"#{C['muted']}",
+                "padding": "6px 0",
+            })
+
+        sections.append(html.Div([
+            html.Div([
+                html.Span(meta["icon"], style={"marginRight": "5px"}),
+                html.Span(meta["label"], style={
+                    "fontWeight": "700", "fontSize": "0.75rem",
+                    "color": f"#{col}",
+                }),
+                html.Span(f" · {meta['desc']}", style={
+                    "fontSize": "0.65rem", "color": f"#{C['muted']}",
+                }),
+            ], style={"marginBottom": "6px"}),
+            content,
+        ], style={
+            "borderLeft": f"3px solid #{col}",
+            "paddingLeft": "10px", "marginBottom": "12px",
+        }))
+
+    return html.Div(sections) if sections else html.Div()
+
+
+def _render_dd_feed(posts: list[dict], alignment: dict) -> html.Div:
+    """DD 포스트 카드 피드."""
+    if not posts:
+        return html.Div(
+            "수집된 DD 게시글이 없습니다. 새로 고침을 눌러 주세요.",
+            style={"fontSize": "0.8rem", "color": f"#{C['muted']}",
+                   "padding": "16px 0"},
+        )
+
+    whale_map = alignment.get("whale_map", {}) if alignment else {}
+    cards     = []
+    _card_s   = {
+        "background":    f"#{C['card']}",
+        "borderRadius":  "10px",
+        "border":        f"1px solid #{C['border']}",
+        "padding":       "12px 14px",
+        "marginBottom":  "10px",
+    }
+
+    for post in posts:
+        sent    = float(post.get("sentiment", 0.0))
+        tickers = post.get("tickers", [])
+        left_col = _sentiment_color(sent)
+
+        # 상단 행 (배지)
+        badges_left = [_sub_badge(post.get("subreddit", ""))]
+        fl = _flair_badge(post.get("flair"))
+        if fl:
+            badges_left.append(fl)
+        up = post.get("upvotes", 0)
+        badges_left.append(html.Span(f"▲ {up:,}", style={
+            "fontSize": "0.68rem", "color": f"#{C['muted']}",
+        }))
+
+        badges_right = [_ticker_chip(t) for t in tickers[:3]]
+        if tickers:
+            wb = _whale_badge_apes(tickers[0], {
+                t: {"whale_rec": it.get("whale_rec")}
+                for cat in _ALIGN_CATS
+                for it in alignment.get(cat, [])
+                if it.get("ticker") == tickers[0]
+            })
+            if wb:
+                badges_right.append(wb)
+
+        title = post.get("title", "")
+        title_short = (title[:88] + "…") if len(title) > 88 else title
+        summary = post.get("summary_ko", "")
+
+        cards.append(html.Div([
+            # 상단: 배지행
+            html.Div([
+                html.Div(badges_left, style={
+                    "display": "flex", "gap": "5px", "alignItems": "center",
+                    "flexWrap": "wrap",
+                }),
+                html.Div(badges_right, style={
+                    "display": "flex", "gap": "5px", "alignItems": "center",
+                    "flexWrap": "wrap",
+                }),
+            ], style={"display": "flex", "justifyContent": "space-between",
+                      "marginBottom": "7px", "flexWrap": "wrap", "gap": "4px"}),
+
+            # 제목 (링크)
+            html.A(title_short, href=post.get("url", "#"), target="_blank",
+                   style={
+                       "fontSize": "0.85rem", "fontWeight": "700",
+                       "color": f"#{C['text']}", "textDecoration": "none",
+                       "display": "block", "marginBottom": "7px",
+                       "lineHeight": "1.45",
+                   }),
+
+            # AI 한국어 요약
+            html.P(summary, style={
+                "fontSize": "0.78rem", "color": f"#{C['muted']}",
+                "margin": "0 0 8px", "lineHeight": "1.6",
+            }) if summary else None,
+
+            # 하단: 작성자 · 서브레딧 · 시간
+            html.Div([
+                html.Span(f"by {post.get('author', '익명')}",
+                          style={"fontSize": "0.65rem", "color": f"#{C['muted']}"}),
+                html.Span(" · ", style={"color": f"#{C['muted']}"}),
+                html.Span(f"r/{post.get('subreddit', '')}",
+                          style={"fontSize": "0.65rem", "color": f"#{C['muted']}"}),
+                html.Span(" · ", style={"color": f"#{C['muted']}"}),
+                html.Span(_time_ago(post.get("created_utc", 0)),
+                          style={"fontSize": "0.65rem", "color": f"#{C['muted']}"}),
+            ], style={"display": "flex", "alignItems": "center", "gap": "2px"}),
+        ], style={**_card_s, "borderLeft": f"3px solid #{left_col}"}))
+
+    return html.Div(cards)
+
+
+def build_apes_tab() -> html.Div:
+    """🦍 Apes Intelligence 탭 레이아웃."""
+    _card = {
+        "background":   f"#{C['card']}",
+        "borderRadius": "12px",
+        "border":       f"1px solid #{C['border']}",
+        "padding":      "1.2rem",
+    }
+
+    def _kpi_card(label: str, cid: str, color: str = C["text"]) -> html.Div:
+        return html.Div([
+            html.Div(label, style={
+                "fontSize": "0.65rem", "fontWeight": "700",
+                "color": f"#{C['muted']}", "letterSpacing": "0.06em",
+                "textTransform": "uppercase", "marginBottom": "4px",
+            }),
+            html.Div("—", id=cid, style={
+                "fontSize": "1.55rem", "fontWeight": "800",
+                "color": f"#{color}", "lineHeight": "1.1",
+            }),
+        ], style={**_card, "flex": "1", "minWidth": "130px", "textAlign": "center"})
+
+    def _section_card(title: str, cid: str) -> html.Div:
+        return html.Div([
+            html.Div(title, style={
+                "fontSize": "0.68rem", "fontWeight": "700",
+                "color": f"#{C['muted']}", "letterSpacing": "0.06em",
+                "textTransform": "uppercase", "marginBottom": "12px",
+            }),
+            html.Div(id=cid),
+        ], style={**_card, "flex": "1", "minWidth": "240px"})
+
+    return html.Div([
+        dcc.Store(id="apes-data-store"),
+
+        # ── 헤더 ─────────────────────────────────────────────────────────────
+        html.Div([
+            html.Div([
+                html.H2("🦍 Apes Intelligence", style={
+                    "margin": "0", "fontSize": "1.25rem",
+                    "fontWeight": "800", "color": f"#{C['text']}",
+                }),
+                html.P("Reddit DD × 기관 투자자 시그널 교차 분석", style={
+                    "margin": "4px 0 0", "fontSize": "0.72rem",
+                    "color": f"#{C['muted']}",
+                }),
+            ], style={"flex": "1"}),
+            html.Div([
+                html.Button("🔄 새로 고침", id="apes-refresh-btn", n_clicks=0, style={
+                    "background": f"#{C['blue']}", "color": "#fff",
+                    "border": "none", "borderRadius": "8px",
+                    "padding": "8px 18px", "fontSize": "0.82rem",
+                    "fontWeight": "700", "cursor": "pointer",
+                }),
+                html.Span("1시간 캐시", style={
+                    "fontSize": "0.65rem", "color": f"#{C['muted']}",
+                    "marginLeft": "8px",
+                }),
+            ], style={"display": "flex", "alignItems": "center"}),
+        ], style={"display": "flex", "alignItems": "flex-start",
+                  "marginBottom": "1.2rem"}),
+
+        # ── 로딩 스피너 ───────────────────────────────────────────────────────
+        dcc.Loading(id="apes-loading", type="circle", color=f"#{C['blue']}",
+            children=html.Div([
+
+                # KPI strip
+                html.Div([
+                    _kpi_card("🔥 분석 티커",     "apes-kpi-tickers", C["purple"]),
+                    _kpi_card("📄 DD 게시글",      "apes-kpi-posts",   C["blue"]),
+                    _kpi_card("🤝 고래·개미 일치", "apes-kpi-aligned", C["green"]),
+                ], style={"display": "flex", "gap": "10px",
+                          "flexWrap": "wrap", "marginBottom": "1.2rem"}),
+
+                # 3열 섹션
+                html.Div([
+                    _section_card("🔥 HOT 티커 순위",   "apes-hot-tickers"),
+                    _section_card("📊 Reddit 센티멘트",  "apes-sentiment"),
+                    _section_card("🐋🦍 고래-개미 교차", "apes-alignment"),
+                ], style={"display": "flex", "gap": "12px",
+                          "flexWrap": "wrap", "marginBottom": "1.2rem"}),
+
+                # DD 피드
+                html.Div([
+                    html.Div("📄 DD 피드 — 심층 분석글만 요약", style={
+                        "fontSize": "0.68rem", "fontWeight": "700",
+                        "color": f"#{C['muted']}", "letterSpacing": "0.06em",
+                        "textTransform": "uppercase", "marginBottom": "12px",
+                    }),
+                    html.Div(id="apes-dd-feed",
+                             children=html.P(
+                                 "🔄 새로 고침을 눌러 Reddit DD 분석을 시작하세요.",
+                                 style={"color": f"#{C['muted']}", "fontSize": "0.82rem"},
+                             )),
+                ], style=_card),
+
+            ]),
+        ),
+
+        # ── 면책 고지 ─────────────────────────────────────────────────────────
+        html.Div(
+            "⚠ Reddit 커뮤니티 데이터는 투자 조언이 아닙니다. "
+            "개미 센티멘트는 단기 노이즈일 수 있으며 반드시 기관 시그널과 함께 참고하세요.",
+            style={
+                "fontSize": "0.68rem", "color": f"#{C['muted']}",
+                "marginTop": "1rem", "textAlign": "center",
+                "borderTop": f"1px solid #{C['border']}",
+                "paddingTop": "10px",
+            },
+        ),
+    ], style={"padding": "0.2rem 0"})
+
+
+# ── APES CALLBACKS ──────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("apes-data-store", "data"),
+    Input("apes-refresh-btn", "n_clicks"),
+    prevent_initial_call=True,
+)
+def apes_fetch_data(n_clicks):
+    """Reddit DD 포스트 + 고래 정렬 데이터를 패치해 Store에 저장합니다."""
+    import time as _time  # noqa: PLC0415
+    from src.reddit_collector import fetch_dd_posts           # noqa: PLC0415
+    from src.analysis_engine import get_whale_retail_alignment # noqa: PLC0415
+    from src.backtester import load_historical_signals        # noqa: PLC0415
+
+    try:
+        posts     = fetch_dd_posts(force=True)
+        signals   = load_historical_signals() or {}
+        alignment = get_whale_retail_alignment(posts, signals)
+        return {
+            "posts":      posts,
+            "alignment":  alignment,
+            "fetched_at": _time.strftime("%H:%M"),
+        }
+    except Exception as exc:
+        logger.error("[apes] 데이터 패치 실패: %s", exc)
+        return {"posts": [], "alignment": {}, "fetched_at": "—", "error": str(exc)}
+
+
+@app.callback(
+    Output("apes-kpi-tickers",  "children"),
+    Output("apes-kpi-posts",    "children"),
+    Output("apes-kpi-aligned",  "children"),
+    Output("apes-hot-tickers",  "children"),
+    Output("apes-sentiment",    "children"),
+    Output("apes-alignment",    "children"),
+    Output("apes-dd-feed",      "children"),
+    Input("apes-data-store",    "data"),
+)
+def apes_render(store_data):
+    """Store 데이터 → 모든 UI 섹션 렌더링 (I/O 없음)."""
+    from dash import no_update  # noqa: PLC0415
+    if not store_data:
+        return (no_update,) * 7
+
+    posts     = store_data.get("posts", [])
+    alignment = store_data.get("alignment", {})
+    error     = store_data.get("error")
+
+    if error:
+        err_el = html.Div(f"오류: {error}",
+                          style={"color": f"#{C['red']}", "fontSize": "0.82rem"})
+        return ("—", "—", "—", err_el, err_el, err_el, err_el)
+
+    ticker_sents = alignment.get("ticker_sentiments", {})
+
+    # KPI
+    n_tickers = len(ticker_sents)
+    n_posts   = len(posts)
+    n_aligned = (len(alignment.get("aligned_bull", [])) +
+                 len(alignment.get("aligned_bear", [])))
+
+    # 섹션 렌더
+    hot    = _render_hot_tickers(ticker_sents)
+    sents  = _render_sentiment_bars(ticker_sents)
+    align  = _render_alignment(alignment)
+    feed   = _render_dd_feed(posts, alignment)
+
+    return (str(n_tickers), str(n_posts), str(n_aligned),
+            hot, sents, align, feed)
 
 
 # ── BACKTEST TAB ───────────────────────────────────────────────────────────────
@@ -4049,6 +4577,8 @@ def render_tab(tab: str, auth_data):
             )
     if tab == "tab-backtest":
         return build_backtest_tab()
+    if tab == "tab-apes":
+        return build_apes_tab()
     return html.Div()
 
 
@@ -4133,15 +4663,157 @@ def render_guide(lang: str, mode: str):
     return build_guide(lang)
 
 
+def _build_inst_intel_banner(targets: list[dict], whale_signals: dict) -> html.Div:
+    """
+    기관투자자 동향 요약 배너를 렌더링합니다.
+    뉴스 배너 아래 항상 노출되며, 종목·행동·근거·고래 13F 배지를 표시합니다.
+    """
+    if not targets:
+        return html.Div(style={"display": "none"})
+
+    _card_s = {
+        "background":    f"#{C['card']}",
+        "borderRadius":  "10px",
+        "border":        f"1px solid #{C['border']}",
+        "padding":       "10px 14px",
+        "flex":          "1",
+        "minWidth":      "200px",
+    }
+    _ACTION_COLOR = {
+        "매수": C["green"],
+        "매도": C["red"],
+        "주목": C["amber"],
+    }
+    _ACTION_ICON = {"매수": "📈", "매도": "📉", "주목": "🔍"}
+
+    ticker_cards = []
+    latest_q = {}
+    if whale_signals:
+        quarters = whale_signals.get("quarters", [])
+        if quarters:
+            latest_q = quarters[-1].get("tickers", {})
+
+    for item in targets:
+        ticker  = item.get("ticker", "")
+        action  = item.get("action", "주목")
+        reason  = item.get("reason", "")
+        col     = _ACTION_COLOR.get(action, C["muted"])
+        icon    = _ACTION_ICON.get(action, "🔍")
+
+        # 고래 13F 배지
+        whale_info = latest_q.get(ticker)
+        whale_badge_el = None
+        if whale_info:
+            rec = whale_info.get("recommendation", "")
+            ri  = REC.get(rec, {})
+            wc  = whale_info.get("whale_count", 0)
+            badge_col = ri.get("color", C["muted"]) if ri else C["muted"]
+            whale_badge_el = html.Div(
+                f"🐋 13F: {rec}  ×{wc}",
+                style={
+                    "fontSize":    "0.68rem",
+                    "fontWeight":  "600",
+                    "color":       f"#{badge_col}",
+                    "marginTop":   "5px",
+                    "padding":     "2px 6px",
+                    "border":      f"1px solid #{badge_col}40",
+                    "borderRadius": "4px",
+                    "display":     "inline-block",
+                },
+            )
+
+        ticker_cards.append(html.Div([
+            # 티커 + 행동
+            html.Div([
+                html.Span(
+                    ticker,
+                    style={
+                        "fontWeight": "800", "fontSize": "0.88rem",
+                        "color": f"#{C['text']}", "marginRight": "6px",
+                    },
+                ),
+                html.Span(
+                    f"{icon} {action}",
+                    style={
+                        "fontSize": "0.72rem", "fontWeight": "700",
+                        "color": f"#{col}",
+                        "border": f"1px solid #{col}60",
+                        "borderRadius": "4px", "padding": "1px 6px",
+                    },
+                ),
+            ], style={"marginBottom": "5px"}),
+            # 근거
+            html.P(reason, style={
+                "fontSize": "0.76rem", "color": f"#{C['muted']}",
+                "margin": "0", "lineHeight": "1.55",
+            }),
+            # 고래 배지
+            whale_badge_el,
+        ], style={**_card_s, "borderLeft": f"3px solid #{col}"}))
+
+    return html.Div([
+        # 헤더
+        html.Div([
+            html.Span("🏦 ", style={"fontSize": "1rem"}),
+            html.Span("기관투자자 실시간 동향",
+                      style={"fontWeight": "800", "fontSize": "0.85rem",
+                             "color": f"#{C['text']}"}),
+            html.Span(" · 오늘 뉴스 기반  · 13F 공시 선행 지표",
+                      style={"fontSize": "0.72rem", "color": f"#{C['muted']}",
+                             "marginLeft": "6px"}),
+        ], style={"marginBottom": "10px"}),
+
+        # 종목 카드들 (가로 배열)
+        html.Div(ticker_cards, style={
+            "display": "flex", "gap": "10px", "flexWrap": "wrap",
+        }),
+
+        # 면책 고지
+        html.P(
+            "⚠ 뉴스 기반 추정 · 13F 공시 45일 지연 · 투자 조언 아님",
+            style={
+                "fontSize": "0.65rem", "color": f"#{C['muted']}",
+                "margin": "8px 0 0", "lineHeight": "1.4",
+            },
+        ),
+    ], style={
+        "background":   f"#{C['card2']}",
+        "border":       f"1px solid #{C['border']}",
+        "borderRadius": "10px",
+        "padding":      "12px 16px",
+        "marginTop":    "8px",
+    })
+
+
 @app.callback(
-    Output("news-banner",        "children"),
-    Input("news-load-trigger",   "n_intervals"),
+    Output("news-banner",      "children"),
+    Output("inst-intel-banner", "children"),
+    Input("news-load-trigger", "n_intervals"),
 )
 def load_news_banner(n_intervals):
-    """Fetch market headlines after page load — keeps startup fast."""
+    """Fetch market headlines + institutional intel after page load."""
     if not n_intervals:
-        return no_update
-    return build_news_banner(fetch_market_news(5))
+        return no_update, no_update
+
+    # ── 뉴스 배너 (기존) ────────────────────────────────────────────────────
+    news_div = build_news_banner(fetch_market_news(5))
+
+    # ── 기관 동향 배너 (신규) ───────────────────────────────────────────────
+    try:
+        from src.news_collector import fetch_institutional_news, extract_inst_targets  # noqa: PLC0415
+        from src.scheduler import _summarize_articles_ko                               # noqa: PLC0415
+        from src.backtester import load_historical_signals                             # noqa: PLC0415
+
+        raw      = fetch_institutional_news(8)
+        enriched = _summarize_articles_ko(raw[:6])
+        targets  = extract_inst_targets(enriched)
+        signals  = load_historical_signals() or {}
+        intel_div = _build_inst_intel_banner(targets, signals)
+    except Exception as exc:
+        logger.warning("[app] 기관 동향 배너 로드 실패: %s", exc)
+        intel_div = html.Div(style={"display": "none"})
+
+    return news_div, intel_div
 
 
 # ── DAILY NEWS SUBSCRIPTION CALLBACKS ──────────────────────────────────────────

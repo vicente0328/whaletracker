@@ -461,3 +461,92 @@ def _fmt_date(raw: str) -> str:
         except (ValueError, TypeError):
             pass
     return raw[:10] if raw else ""
+
+
+# ---------------------------------------------------------------------------
+# Institutional intelligence extraction (for the always-visible intel banner)
+# ---------------------------------------------------------------------------
+
+def extract_inst_targets(enriched_articles: list[dict]) -> list[dict]:
+    """
+    기관투자자 뉴스에서 현재 주목/매수/매도 종목을 추출합니다.
+
+    Claude claude-sonnet-4-6를 1회 호출해 뉴스 전체를 종합한 뒤
+    JSON 배열로 종목 · 행동 · 한국어 근거를 반환합니다.
+
+    Args:
+        enriched_articles: _summarize_articles_ko()로 처리된 기사 목록.
+                           headline, summary_ko, sector_impact 필드를 사용합니다.
+
+    Returns:
+        [{"ticker": "NVDA", "action": "매수", "reason": "...한국어 2문장..."}]
+        추출 실패 또는 뉴스에서 종목을 특정할 수 없으면 [] 반환.
+    """
+    if not enriched_articles:
+        return []
+
+    try:
+        import json as _json  # noqa: PLC0415
+        import re as _re      # noqa: PLC0415
+        import anthropic       # noqa: PLC0415
+
+        # 헤드라인 + 요약 결합
+        text_blocks = []
+        for i, art in enumerate(enriched_articles[:10], 1):
+            hl  = art.get("headline", "")
+            sko = art.get("summary_ko", "")
+            si  = art.get("sector_impact", {})
+            block = f"{i}. {hl}"
+            if sko:
+                block += f"\n   요약: {sko}"
+            if si and si.get("sector"):
+                block += f"\n   섹터 영향: {si['sector']} ({si.get('direction', '')})"
+            text_blocks.append(block)
+
+        prompt = (
+            "다음은 오늘 기관투자자 동향 관련 뉴스입니다.\n\n"
+            + "\n\n".join(text_blocks)
+            + "\n\n"
+            "위 뉴스에서 기관투자자들이 현재 주목하거나 매수/매도하는 "
+            "구체적인 주식 종목을 추출하세요.\n\n"
+            "반환 형식 (JSON 배열):\n"
+            '[{"ticker":"NVDA","action":"매수","reason":"...한국어 2문장 이내..."}]\n\n'
+            "규칙:\n"
+            "- ticker: NYSE/NASDAQ 대문자 심볼 (예: NVDA, AAPL)\n"
+            "- action: '매수' | '매도' | '주목' 중 하나\n"
+            "- reason: 뉴스 근거 기반 한국어 2문장 이내\n"
+            "- 최대 4개 종목만 반환\n"
+            "- 뉴스에서 특정 종목을 명확히 추론할 수 없으면 빈 배열 [] 반환"
+        )
+
+        client = anthropic.Anthropic()
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=800,
+            system=(
+                "당신은 기관투자자 동향 전문 애널리스트입니다. "
+                "뉴스를 분석해 기관이 지금 어떤 종목에 집중하는지 파악합니다."
+            ),
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw = msg.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = _re.sub(r"\s*```$",           "", raw)
+        results = _json.loads(raw)
+
+        # 유효성 검사
+        validated = []
+        for item in results:
+            if isinstance(item, dict) and item.get("ticker") and item.get("action"):
+                validated.append({
+                    "ticker": str(item["ticker"]).upper()[:6],
+                    "action": str(item["action"]),
+                    "reason": str(item.get("reason", "")),
+                })
+        return validated[:4]
+
+    except Exception as exc:
+        import logging as _logging  # noqa: PLC0415
+        _logging.getLogger(__name__).warning("[news] inst target 추출 실패: %s", exc)
+        return []

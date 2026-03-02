@@ -333,3 +333,131 @@ _DEFAULT_SECTOR_MAP: dict[str, str] = {
     "AEP":   "Utilities",   "EXC":   "Utilities",   "XEL":   "Utilities",
     "PCG":   "Utilities",   "SRE":   "Utilities",   "WEC":   "Utilities",
 }
+
+
+# ---------------------------------------------------------------------------
+# Whale-Retail Alignment (Reddit ↔ 13F 교차 분석)
+# ---------------------------------------------------------------------------
+
+# 개미 감성 분류 임계값
+_RETAIL_BULL = +0.2
+_RETAIL_BEAR = -0.2
+
+# 고래 강세 추천 레이블
+_WHALE_BULL_RECS = frozenset({"STRONG BUY", "BUY"})
+
+
+def get_whale_retail_alignment(
+    posts: list[dict],
+    signals_data: dict | None,
+) -> dict:
+    """
+    Reddit DD 포스트 감성과 최신 고래 13F 시그널을 교차 분석합니다.
+
+    분류:
+      aligned_bull  — 고래 강세 + 개미 강세  (합의 매수)
+      divergence    — 고래 강세 + 개미 약세  (역발상 신호 — 컨트라리안 기회)
+      hype_trap     — 고래 미포지션 + 개미 강세  (하이프 트랩 — 주의)
+      aligned_bear  — 고래 미포지션/약세 + 개미 약세  (합의 약세)
+
+    Args:
+        posts:        fetch_dd_posts()가 반환한 엔리치먼트 게시글 목록.
+        signals_data: load_historical_signals()가 반환한 dict. None이면 고래 데이터 없음으로 처리.
+
+    Returns:
+        {
+            "ticker_sentiments": {TICKER: {"avg_sentiment", "mention_count", "total_upvotes"}},
+            "whale_map":         {TICKER: {"recommendation", "score", "whale_count"}},
+            "aligned_bull":  [item, ...],
+            "divergence":    [item, ...],
+            "hype_trap":     [item, ...],
+            "aligned_bear":  [item, ...],
+        }
+        item = {"ticker", "avg_sentiment", "total_upvotes", "mention_count",
+                "whale_rec", "whale_score", "whale_count", "category"}
+    """
+    # ── 1. 티커별 감성 집계 ──────────────────────────────────────────────────
+    ticker_sents: dict[str, dict] = {}
+    for post in posts:
+        tickers   = post.get("tickers") or []
+        sentiment = float(post.get("sentiment", 0.0))
+        upvotes   = int(post.get("upvotes", 0))
+
+        for ticker in tickers[:3]:   # 포스트당 최대 3개 티커
+            if ticker not in ticker_sents:
+                ticker_sents[ticker] = {
+                    "sentiment_sum":  0.0,
+                    "mention_count":  0,
+                    "total_upvotes":  0,
+                    "avg_sentiment":  0.0,
+                }
+            s = ticker_sents[ticker]
+            # 업보트 가중 감성 합산
+            s["sentiment_sum"] += sentiment * (upvotes + 1)
+            s["mention_count"] += 1
+            s["total_upvotes"] += upvotes
+
+    # 가중 평균 감성 계산 후 임시 필드 제거
+    for ticker, s in ticker_sents.items():
+        denom = s["total_upvotes"] + s["mention_count"]
+        s["avg_sentiment"] = s["sentiment_sum"] / denom if denom else 0.0
+        del s["sentiment_sum"]
+
+    # ── 2. 고래 시그널 맵 구성 ───────────────────────────────────────────────
+    whale_map: dict[str, dict] = {}
+    if signals_data:
+        quarters = signals_data.get("quarters", [])
+        if quarters:
+            latest = quarters[-1].get("tickers", {})
+            for ticker, info in latest.items():
+                whale_map[ticker] = {
+                    "recommendation": info.get("recommendation"),
+                    "score":          float(info.get("score", 0)),
+                    "whale_count":    int(info.get("whale_count", 0)),
+                }
+
+    # ── 3. 분류 ──────────────────────────────────────────────────────────────
+    result: dict[str, list] = {
+        "aligned_bull": [],
+        "divergence":   [],
+        "hype_trap":    [],
+        "aligned_bear": [],
+    }
+
+    for ticker, s in ticker_sents.items():
+        avg_sent  = s["avg_sentiment"]
+        whale_inf = whale_map.get(ticker, {})
+        whale_rec = whale_inf.get("recommendation")
+
+        is_retail_bull = avg_sent >  _RETAIL_BULL
+        is_retail_bear = avg_sent <  _RETAIL_BEAR
+        is_whale_bull  = whale_rec in _WHALE_BULL_RECS
+
+        if   is_whale_bull and is_retail_bull:
+            cat = "aligned_bull"
+        elif is_whale_bull and is_retail_bear:
+            cat = "divergence"
+        elif (not is_whale_bull) and is_retail_bull:
+            cat = "hype_trap"
+        else:
+            cat = "aligned_bear"
+
+        item = {
+            "ticker":        ticker,
+            "avg_sentiment": round(avg_sent, 3),
+            "total_upvotes": s["total_upvotes"],
+            "mention_count": s["mention_count"],
+            "whale_rec":     whale_rec,
+            "whale_score":   whale_inf.get("score"),
+            "whale_count":   whale_inf.get("whale_count"),
+            "category":      cat,
+        }
+        result[cat].append(item)
+
+    # 각 카테고리 내 업보트 기준 정렬
+    for cat in result:
+        result[cat].sort(key=lambda x: x["total_upvotes"], reverse=True)
+
+    result["ticker_sentiments"] = ticker_sents   # type: ignore[assignment]
+    result["whale_map"]         = whale_map       # type: ignore[assignment]
+    return result
