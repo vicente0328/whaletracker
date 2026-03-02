@@ -3039,8 +3039,9 @@ def build_backtest_tab() -> html.Div:
                    "borderTop": f"1px solid #{C['border']}", "paddingTop": "10px"},
         ),
 
-        # Hidden store for selected period
+        # Hidden stores
         dcc.Store(id="bt-period-store", data=3),
+        dcc.Store(id="bt-done-count",   data=0),   # increments each time run_bt finishes
 
     ], style={"padding": "0.2rem 0"})
 
@@ -3085,7 +3086,7 @@ def _bt_period_styles(years):
 # ── Clientside: immediate button + step-bar feedback on click ──────────────
 app.clientside_callback(
     """
-    function(n_clicks, kpi_val) {
+    function(n_clicks, done_count) {
         var ctx = dash_clientside.callback_context;
         if (!ctx || !ctx.triggered || !ctx.triggered.length) {
             return [dash_clientside.no_update,
@@ -3101,7 +3102,7 @@ app.clientside_callback(
                  "padding": "16px 0 8px"}
             ];
         }
-        /* kpi_val changed → run_bt completed */
+        /* done_count changed → run_bt completed → hide loading bar */
         return ["▶ Run Backtest", false, {"display": "none"}];
     }
     """,
@@ -3109,32 +3110,33 @@ app.clientside_callback(
     Output("bt-run-btn",    "disabled"),
     Output("bt-status-bar", "style"),
     Input("bt-run-btn",     "n_clicks"),
-    Input("bt-kpi-total",   "children"),
+    Input("bt-done-count",  "data"),
     prevent_initial_call=True,
 )
 
 
 @app.callback(
-    Output("bt-kpi-total",    "children"),
-    Output("bt-kpi-alpha",    "children"),
-    Output("bt-kpi-ann",      "children"),
-    Output("bt-kpi-dd",       "children"),
-    Output("bt-kpi-sharpe",   "children"),
-    Output("bt-kpi-win",      "children"),
-    Output("bt-kpi-trades",   "children"),
-    Output("bt-kpi-final",    "children"),
+    Output("bt-kpi-total",       "children"),
+    Output("bt-kpi-alpha",       "children"),
+    Output("bt-kpi-ann",         "children"),
+    Output("bt-kpi-dd",          "children"),
+    Output("bt-kpi-sharpe",      "children"),
+    Output("bt-kpi-win",         "children"),
+    Output("bt-kpi-trades",      "children"),
+    Output("bt-kpi-final",       "children"),
     Output("bt-chart-container", "children"),
-    Output("bt-trade-log",    "children"),
-    Input("bt-run-btn",       "n_clicks"),
-    State("bt-period-store",  "data"),
-    State("bt-capital",       "value"),
+    Output("bt-trade-log",       "children"),
+    Output("bt-done-count",      "data"),      # ← completion signal (always changes)
+    Input("bt-run-btn",          "n_clicks"),
+    State("bt-period-store",     "data"),
+    State("bt-capital",          "value"),
     prevent_initial_call=True,
 )
 def run_bt(n_clicks, years, capital):
     import plotly.graph_objects as go
     from src.backtester import run_backtest, load_historical_signals
 
-    _empty = ("—",) * 8 + (html.Div(), html.Div())
+    _empty = ("—",) * 8 + (html.Div(), html.Div(), 0)
     if not n_clicks:
         return _empty
 
@@ -3161,7 +3163,7 @@ def run_bt(n_clicks, years, capital):
                        "fontFamily": "monospace"},
             ),
         ], style={"padding": "1.5rem", "maxWidth": "540px"})
-        return ("N/A",) * 8 + (msg, html.Div())
+        return ("N/A",) * 8 + (msg, html.Div(), n_clicks)
 
     try:
         result = run_backtest(years=years, initial_capital=capital, min_signal="STRONG BUY")
@@ -3170,7 +3172,7 @@ def run_bt(n_clicks, years, capital):
         err = html.Div(f"Backtest error: {exc}",
                        style={"color": f"#{C['red']}", "padding": "1rem",
                               "fontSize": "0.85rem"})
-        return ("ERR",) * 8 + (err, html.Div())
+        return ("ERR",) * 8 + (err, html.Div(), n_clicks)
 
     if result is None:
         msg = html.Div([
@@ -3184,7 +3186,7 @@ def run_bt(n_clicks, years, capital):
                 style={"fontSize": "0.82rem", "color": f"#{C['muted']}"},
             ),
         ], style={"padding": "1rem", "maxWidth": "520px"})
-        return ("N/A",) * 8 + (msg, html.Div())
+        return ("N/A",) * 8 + (msg, html.Div(), n_clicks)
 
     try:
         m = result.metrics
@@ -3549,7 +3551,7 @@ def run_bt(n_clicks, years, capital):
                             "color": f"#{C['text']}", "marginBottom": "12px"}),
             html.Div(detail_cards),
         ])
-        return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section
+        return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section, n_clicks
 
     except Exception as exc:
         logger.error("Backtest render failed: %s", exc, exc_info=True)
@@ -3557,7 +3559,7 @@ def run_bt(n_clicks, years, capital):
             f"렌더링 오류: {exc}",
             style={"color": f"#{C['red']}", "padding": "1rem", "fontSize": "0.85rem"},
         )
-        return ("ERR",) * 8 + (err, html.Div())
+        return ("ERR",) * 8 + (err, html.Div(), n_clicks)
 
 
 # ── CALLBACKS ──────────────────────────────────────────────────────────────────
