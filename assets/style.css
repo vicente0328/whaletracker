@@ -605,3 +605,39 @@ details[open] .expander-summary { border-radius: 10px 10px 0 0; }
     /* Auth button compact */
     .guide-btn  { padding: 7px 10px; font-size: 0.72rem; min-width: 70px; }
 }
+
+/* ── Backtest: step-by-step loading animation ─────────────────────────────── */
+@keyframes bt-step-pulse {
+    0%, 100% { opacity: 0.25; color: #8892A4; }
+    40%       { opacity: 1;    color: #4B7BE5; }
+}
+
+.bt-step {
+    padding: 5px 0;
+    font-size: 0.83rem;
+    color: #8892A4;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bt-step-1 { animation: bt-step-pulse 3.2s ease-in-out 0.0s  infinite; }
+.bt-step-2 { animation: bt-step-pulse 3.2s ease-in-out 0.8s  infinite; }
+.bt-step-3 { animation: bt-step-pulse 3.2s ease-in-out 1.6s  infinite; }
+.bt-step-4 { animation: bt-step-pulse 3.2s ease-in-out 2.4s  infinite; }
+
+/* Spinning indicator dot for the header */
+@keyframes bt-spin {
+    to { transform: rotate(360deg); }
+}
+.bt-spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2px solid rgba(75,123,229,0.25);
+    border-top-color: #4B7BE5;
+    border-radius: 50%;
+    animation: bt-spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+    flex-shrink: 0;
+}

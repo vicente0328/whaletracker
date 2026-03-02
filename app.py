@@ -2973,6 +2973,38 @@ def build_backtest_tab() -> html.Div:
                   "flexWrap": "wrap", "marginBottom": "1.4rem",
                   **_card}),
 
+        # ── Loading step indicator (clientside-controlled) ──────────────────
+        html.Div(
+            id="bt-status-bar",
+            style={"display": "none"},
+            children=html.Div([
+                html.Div([
+                    html.Span(className="bt-spinner"),
+                    html.Span("백테스트 실행 중…", style={
+                        "fontSize": "0.9rem", "fontWeight": "700",
+                        "color": f"#{C['text']}",
+                    }),
+                ], style={"display": "flex", "alignItems": "center",
+                          "justifyContent": "center", "marginBottom": "16px"}),
+                *[html.Div([
+                    html.Span(num, style={"width": "22px", "textAlign": "center",
+                                         "flexShrink": "0",
+                                         "color": f"#{C['blue']}"}),
+                    html.Span(label),
+                  ], className=f"bt-step bt-step-{i + 1}")
+                  for i, (num, label) in enumerate([
+                    ("①", "히스토리컬 시그널 로딩"),
+                    ("②", "가격 데이터 수집 (FMP API)"),
+                    ("③", "포트폴리오 시뮬레이션"),
+                    ("④", "차트 및 지표 생성"),
+                ])],
+            ], style={
+                "background": f"#{C['card2']}", "borderRadius": "12px",
+                "padding": "24px 32px", "border": f"1px solid #{C['border']}",
+                "maxWidth": "320px",
+            }),
+        ),
+
         # ── KPI strip ───────────────────────────────────────────────────────
         dcc.Loading(
             id="bt-loading",
@@ -3048,6 +3080,38 @@ def _bt_period_styles(years):
         _active if years == 3 else _idle,
         _active if years == 5 else _idle,
     )
+
+
+# ── Clientside: immediate button + step-bar feedback on click ──────────────
+app.clientside_callback(
+    """
+    function(n_clicks, kpi_val) {
+        var ctx = dash_clientside.callback_context;
+        if (!ctx || !ctx.triggered || !ctx.triggered.length) {
+            return [dash_clientside.no_update,
+                    dash_clientside.no_update,
+                    dash_clientside.no_update];
+        }
+        var trigger = ctx.triggered[0].prop_id;
+        if (trigger === 'bt-run-btn.n_clicks' && n_clicks) {
+            return [
+                "⏳ 실행 중…",
+                true,
+                {"display": "flex", "justifyContent": "center",
+                 "padding": "16px 0 8px"}
+            ];
+        }
+        /* kpi_val changed → run_bt completed */
+        return ["▶ Run Backtest", false, {"display": "none"}];
+    }
+    """,
+    Output("bt-run-btn",    "children"),
+    Output("bt-run-btn",    "disabled"),
+    Output("bt-status-bar", "style"),
+    Input("bt-run-btn",     "n_clicks"),
+    Input("bt-kpi-total",   "children"),
+    prevent_initial_call=True,
+)
 
 
 @app.callback(
