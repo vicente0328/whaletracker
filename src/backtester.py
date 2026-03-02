@@ -11,13 +11,14 @@ Data pipeline:
 
 Strategy rules:
   • At each 13F signal_date (when all whale data became public):
-      – Enter equal-weight positions in all STRONG BUY tickers
-      – Exit positions that no longer meet the threshold
-      – Rebalance remaining positions to equal weight
+      – Enter SCORE-WEIGHTED positions in top STRONG BUY tickers (max 8)
+        (higher-conviction signals receive proportionally larger allocation)
+      – Exit positions that no longer meet the threshold or hit stop-loss
+      – Rebalance to score-weighted targets each quarter
+  • Stop-loss: exit any position that falls ≥15% below cost basis intra-quarter
   • Benchmark: buy-and-hold SPY with the same initial capital
   • Trade execution price: closing price on signal_date
   • No transaction costs (disclosed in UI disclaimer)
-  • Max positions cap to avoid over-concentration (default: 15)
 
 Important timeline note:
   signal_date = max(filed_dates) across all whales for that quarter.
@@ -50,8 +51,9 @@ _ROOT           = Path(__file__).parent.parent
 _SIGNALS_FILE   = _ROOT / "data" / "historical_signals.json"
 _PRICE_CACHE: dict[str, dict[str, pd.Series]] = {}   # (from, to) → {ticker: Series}
 
-STRONG_BUY_MIN_SCORE = 6
+STRONG_BUY_MIN_SCORE = 7    # raised from 6 — matches new precompute threshold
 BUY_MIN_SCORE        = 3
+STOP_LOSS_PCT        = 0.15  # exit if position drops ≥15% below cost basis
 
 
 # ── Data classes ───────────────────────────────────────────────────────────────
@@ -182,7 +184,7 @@ def run_backtest(
     years:           int   = 3,
     initial_capital: float = 100_000.0,
     min_signal:      str   = "STRONG BUY",
-    max_positions:   int   = 15,
+    max_positions:   int   = 8,     # reduced from 15: concentration improves alpha
 ) -> BacktestResult | None:
     """
     Simulate following WhaleTracker signals over `years` years.
@@ -263,6 +265,22 @@ def run_backtest(
     q_idx = 0   # pointer into quarters_in_window
 
     for day in trading_days:
+        # ── Daily stop-loss check (before rebalance) ──────────────────────────
+        for ticker in list(positions.keys()):
+            px   = _price_on(all_prices, ticker, day)
+            cost = cost_basis.get(ticker, 0)
+            if px and cost > 0 and px <= cost * (1 - STOP_LOSS_PCT):
+                shares = positions.pop(ticker)
+                cost_basis.pop(ticker, None)
+                val = shares * px
+                cash += val
+                trades.append(Trade(
+                    ticker=ticker, company="", action="SELL",
+                    date=day, price=px, shares=shares, value=val,
+                    signal="STOP_LOSS", score=0,
+                ))
+                logger.debug("[backtester] Stop-loss: %s @ %.2f (cost %.2f)", ticker, px, cost)
+
         # ── Rebalance on signal_date arrival ─────────────────────────────────
         while (q_idx < len(quarters_in_window)
                and quarters_in_window[q_idx]["signal_date"] <= day):
@@ -306,23 +324,32 @@ def run_backtest(
                     del positions[ticker]
                     del cost_basis[ticker]
 
-            # ── Equal-weight target value per position ────────────────────────
+            # ── Score-weighted target allocation ──────────────────────────────
             n_targets = len(target_set)
             if n_targets == 0:
                 q_idx += 1
                 continue
 
-            port_now   = cash + sum(
+            port_now = cash + sum(
                 positions[t] * (_price_on(all_prices, t, day) or cost_basis.get(t, 0))
                 for t in positions
             )
-            target_val = port_now / n_targets
+            # Weight each position proportionally to its conviction score
+            total_score = sum(scores[t]["score"] for t in candidates if t in target_set)
+            if total_score <= 0:
+                total_score = n_targets  # fallback to equal-weight if scores absent
+
+            def _target_val(ticker: str) -> float:
+                w = scores[ticker]["score"] / total_score if total_score else (1 / n_targets)
+                return port_now * w
 
             # ── Enter / rebalance positions ───────────────────────────────────
             for ticker in candidates:
                 px = _price_on(all_prices, ticker, day)
                 if not px or px <= 0:
                     continue
+
+                target_val = _target_val(ticker)
 
                 if ticker in positions:
                     # Trim or add to existing — only rebalance if drift > $50
@@ -334,7 +361,7 @@ def run_backtest(
                     positions[ticker] += adj_shares
                     cash              -= diff
                 else:
-                    # New position
+                    # New position — respect available cash
                     avail_per_new = (
                         cash * 0.9 / max(len(target_set - current_set), 1)
                     )

@@ -120,14 +120,22 @@ def _cap_filed_date(report_date: str, filed_date: str) -> str:
         return filed_date
 
 
-# ── Signal scoring (mirrors analysis_engine.py) ───────────────────────────────
+# ── Signal scoring ────────────────────────────────────────────────────────────
+# NEW_ENTRY scores highest: a whale opening a fresh position carries more
+# alpha potential than adding to an existing one (academic consensus).
+# AGGRESSIVE_BUY is a supporting signal; HIGH_CONCENTRATION alone is weak
+# (many T1 whales are inherently concentrated).
 _SIG_SCORE = {
-    "NEW_ENTRY":          3,
-    "AGGRESSIVE_BUY":     4,
-    "HIGH_CONCENTRATION": 2,
+    "NEW_ENTRY":          5,   # was 3 — fresh position = strongest alpha signal
+    "AGGRESSIVE_BUY":     3,   # was 4 — holding add = supporting, not primary
+    "HIGH_CONCENTRATION": 1,   # was 2 — position size alone is a weak trigger
 }
 
-STRONG_BUY_THRESHOLD = 6      # OR score ≥ 4 with 2+ whales
+# Multi-whale consensus bonus added in aggregate_quarter_signals():
+#   ≥ 3 whales in same ticker: +2.0   (rare cross-fund consensus)
+#   ≥ 2 whales in same ticker: +1.0   (meaningful agreement)
+
+STRONG_BUY_THRESHOLD = 7      # raised from 6; requires either Tier-1 solo or consensus
 BUY_THRESHOLD        = 3
 
 
@@ -341,11 +349,18 @@ def aggregate_quarter_signals(
                 if sig not in agg[ticker]["signals"]:
                     agg[ticker]["signals"].append(sig)
 
+    # Multi-whale consensus bonus: cross-fund agreement is a key alpha driver
+    for info in agg.values():
+        wc = info["whale_count"]
+        if wc >= 3:
+            info["score"] += 2.0   # strong consensus — rare and significant
+        elif wc >= 2:
+            info["score"] += 1.0   # meaningful agreement
+
     # Assign recommendation
     for info in agg.values():
         sc = info["score"]
-        wc = info["whale_count"]
-        if sc >= STRONG_BUY_THRESHOLD or (sc >= 4 and wc >= 2):
+        if sc >= STRONG_BUY_THRESHOLD:
             info["recommendation"] = "STRONG BUY"
         elif sc >= BUY_THRESHOLD:
             info["recommendation"] = "BUY"

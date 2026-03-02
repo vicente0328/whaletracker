@@ -75,17 +75,20 @@ TRACKED_WHALES: dict[str, str] = {
 # Tier 2 — Activist / concentrated value funds
 # Tier 3 — Growth / quant / high-turnover funds
 WHALE_TIERS: dict[str, dict] = {
-    "Berkshire Hathaway":    {"tier": 1, "style": "Value",      "label": "T1 · Value",      "multiplier": 1.5},
+    # T1 — High-conviction, long-term holders: new entries are rarest and most meaningful
+    "Berkshire Hathaway":    {"tier": 1, "style": "Value",      "label": "T1 · Value",      "multiplier": 2.0},
     "Bridgewater Associates":{"tier": 1, "style": "Macro",      "label": "T1 · Macro",      "multiplier": 1.2},
     "Viking Global":         {"tier": 1, "style": "Value-Growth","label": "T1 · Value-Growth","multiplier": 1.3},
-    "Pershing Square":       {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.3},
+    # T2 — Activist funds: 13F new entries often precede public campaigns
+    "Pershing Square":       {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.5},
     "Appaloosa Management":  {"tier": 2, "style": "Value",      "label": "T2 · Value",      "multiplier": 1.1},
-    "Third Point":           {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.2},
-    "Elliott Management":    {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.2},
+    "Third Point":           {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.3},
+    "Elliott Management":    {"tier": 2, "style": "Activist",   "label": "T2 · Activist",   "multiplier": 1.5},
+    # T3 — High-turnover quant/growth: signals noisier, lower weight
     "Tiger Global":          {"tier": 3, "style": "Growth",     "label": "T3 · Growth",     "multiplier": 1.0},
     "Coatue Management":     {"tier": 3, "style": "Tech-Growth", "label": "T3 · Tech",       "multiplier": 1.0},
-    "D.E. Shaw":             {"tier": 3, "style": "Quant",      "label": "T3 · Quant",      "multiplier": 0.9},
-    "Two Sigma":             {"tier": 3, "style": "Quant",      "label": "T3 · Quant",      "multiplier": 0.9},
+    "D.E. Shaw":             {"tier": 3, "style": "Quant",      "label": "T3 · Quant",      "multiplier": 0.8},
+    "Two Sigma":             {"tier": 3, "style": "Quant",      "label": "T3 · Quant",      "multiplier": 0.8},
     "Citadel Advisors":      {"tier": 3, "style": "Multi-Strat","label": "T3 · Multi-Strat","multiplier": 1.0},
 }
 
@@ -339,10 +342,11 @@ def _fetch_fmp_13f(cik: str) -> list[dict[str, Any]]:
         url = (f"https://financialmodelingprep.com/api/v3/form-thirteen-f/{cik}"
                f"?apikey={FMP_API_KEY}")
         resp = requests.get(url, timeout=15)
-        if resp.status_code in (401, 403):
-            logger.info("FMP plan does not include 13F (HTTP %s) — falling back to EDGAR.", resp.status_code)
+        if not resp.ok:
+            # 401/403 = plan restriction, 402 = deprecated endpoint,
+            # 429 = rate-limited — all fall back to EDGAR instead of raising
+            logger.info("FMP 13F HTTP %s — falling back to EDGAR.", resp.status_code)
         else:
-            resp.raise_for_status()
             data = resp.json()
             if isinstance(data, list) and data:
                 return _normalize_fmp_holdings_with_signals(data)
@@ -819,9 +823,9 @@ def _fetch_fmp_form4(tickers: list[str]) -> dict[str, list[dict[str, Any]]]:
                 f"?symbol={ticker}&page=0&apikey={FMP_API_KEY}"
             )
             resp = requests.get(url, timeout=15)
-            if resp.status_code == 403:
-                # Plan restriction — stop querying FMP and switch to EDGAR
-                logger.info("FMP plan excludes insider-trading — using EDGAR Form 4 fallback.")
+            if resp.status_code in (402, 403, 429):
+                # Plan restriction / deprecated / rate-limited — switch to EDGAR
+                logger.info("FMP insider-trading HTTP %s — using EDGAR Form 4 fallback.", resp.status_code)
                 return _fetch_edgar_form4(tickers)
             resp.raise_for_status()
             raw = resp.json()
