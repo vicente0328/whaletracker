@@ -3162,7 +3162,7 @@ def run_bt(n_clicks, years, capital):
         for ql in result.quarterly_log:
             fig.add_vline(
                 x=ql.signal_date, line_width=1,
-                line_dash="dot", line_color=f"#{C['border']}",
+                line_dash="dot", line_color="rgba(255,255,255,0.07)",
             )
 
         src_note = ""
@@ -3187,10 +3187,10 @@ def run_bt(n_clicks, years, capital):
                 bgcolor="rgba(0,0,0,0)",
                 font=dict(size=11, color=f"#{C['muted']}"),
             ),
-            xaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
-                       linecolor=f"#{C['border']}"),
-            yaxis=dict(gridcolor=f"#{C['border']}", showgrid=True,
-                       linecolor=f"#{C['border']}", ticksuffix="%"),
+            xaxis=dict(gridcolor="rgba(255,255,255,0.07)", showgrid=True,
+                       linecolor="rgba(255,255,255,0.07)"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.07)", showgrid=True,
+                       linecolor="rgba(255,255,255,0.07)", ticksuffix="%"),
             hovermode="x unified",
             height=360,
         )
@@ -3560,13 +3560,14 @@ def update_hour_options(tz, display_hour):
 @app.callback(
     Output("daily-news-sub-store",       "data"),
     Input("daily-news-toggle",           "n_clicks"),
-    Input("daily-news-hour-picker",      "value"),
-    Input("daily-news-topics-checklist", "value"),
-    Input("daily-news-tz-radio",         "value"),
+    Input("daily-news-settings-btn",     "n_clicks"),
+    State("daily-news-hour-picker",      "value"),
+    State("daily-news-topics-checklist", "value"),
+    State("daily-news-tz-radio",         "value"),
     State("daily-news-sub-store",        "data"),
     prevent_initial_call=True,
 )
-def update_news_sub_settings(toggle_clicks, display_hour, topics, tz, current):
+def update_news_sub_settings(toggle_clicks, settings_btn_clicks, display_hour, topics, tz, current):
     """Handle toggle click and settings changes; persist to disk."""
     if not isinstance(current, dict):
         current = dict(_NEWS_SUB_DEFAULTS)
@@ -3633,7 +3634,9 @@ def send_test_slack_news(n_clicks):
         items = fetch_market_news(5)
         if not items:
             return "⚠ 뉴스 데이터 없음"
-        send_daily_news_alert(items[0])
+        ok = send_daily_news_alert(items[0])
+        if not ok:
+            return "✗ Slack 전송 실패 (토큰/채널 확인)"
         headline = items[0].get("headline", "")[:40]
         return f"✓ 발송 완료 — {headline}…"
     except Exception as exc:
