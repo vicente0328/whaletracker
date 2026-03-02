@@ -3350,16 +3350,20 @@ def _render_dd_feed(posts: list[dict], alignment: dict) -> html.Div:
             "fontSize": "0.68rem", "color": f"#{C['muted']}",
         }))
 
-        badges_right = [_ticker_chip(t) for t in tickers[:3]]
+        badges_right = [_ticker_chip(ticker) for ticker in tickers[:3]]
         if tickers:
-            wb = _whale_badge_apes(tickers[0], {
-                t: {"whale_rec": it.get("whale_rec")}
-                for cat in _ALIGN_CATS
-                for it in alignment.get(cat, [])
-                if it.get("ticker") == tickers[0]
-            })
-            if wb:
-                badges_right.append(wb)
+            # whale_map uses "recommendation" key; build a lookup for _whale_badge_apes
+            _wmap = alignment.get("whale_map", {}) if alignment else {}
+            _winfo = _wmap.get(tickers[0], {})
+            _wrec  = _winfo.get("recommendation") if _winfo else None
+            if _wrec:
+                _wri  = REC.get(_wrec, {})
+                _wcol = _wri.get("color", C["muted"]) if _wri else C["muted"]
+                badges_right.append(html.Span(f"🐋 {_wrec}", style={
+                    "fontSize": "0.65rem", "fontWeight": "700",
+                    "color": f"#{_wcol}", "border": f"1px solid #{_wcol}60",
+                    "borderRadius": "4px", "padding": "1px 6px",
+                }))
 
         title = post.get("title", "")
         title_short = (title[:88] + "…") if len(title) > 88 else title
@@ -3528,7 +3532,7 @@ def build_apes_tab() -> html.Div:
 @app.callback(
     Output("apes-data-store", "data"),
     Input("apes-refresh-btn", "n_clicks"),
-    prevent_initial_call=True,
+    prevent_initial_call=False,   # 탭 첫 진입 시 mock 데이터 자동 로드
 )
 def apes_fetch_data(n_clicks):
     """Reddit DD 포스트 + 고래 정렬 데이터를 패치해 Store에 저장합니다."""
@@ -3538,7 +3542,8 @@ def apes_fetch_data(n_clicks):
     from src.backtester import load_historical_signals        # noqa: PLC0415
 
     try:
-        posts     = fetch_dd_posts(force=True)
+        force     = bool(n_clicks and n_clicks > 0)   # 버튼 클릭 시만 강제 재패치
+        posts     = fetch_dd_posts(force=force)
         signals   = load_historical_signals() or {}
         alignment = get_whale_retail_alignment(posts, signals)
         return {
@@ -3584,11 +3589,19 @@ def apes_render(store_data):
     n_aligned = (len(alignment.get("aligned_bull", [])) +
                  len(alignment.get("aligned_bear", [])))
 
-    # 섹션 렌더
-    hot    = _render_hot_tickers(ticker_sents)
-    sents  = _render_sentiment_bars(ticker_sents)
-    align  = _render_alignment(alignment)
-    feed   = _render_dd_feed(posts, alignment)
+    # 섹션 렌더 — 개별 try/except로 한 섹션 오류가 전체를 막지 않도록
+    def _safe(fn, *args):
+        try:
+            return fn(*args)
+        except Exception as exc:
+            logger.error("[apes] render helper %s 오류: %s", fn.__name__, exc)
+            return html.Div(f"렌더 오류: {exc}",
+                            style={"color": f"#{C['red']}", "fontSize": "0.75rem"})
+
+    hot    = _safe(_render_hot_tickers,    ticker_sents)
+    sents  = _safe(_render_sentiment_bars, ticker_sents)
+    align  = _safe(_render_alignment,      alignment)
+    feed   = _safe(_render_dd_feed,        posts, alignment)
 
     return (str(n_tickers), str(n_posts), str(n_aligned),
             hot, sents, align, feed)
