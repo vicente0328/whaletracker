@@ -3262,98 +3262,294 @@ def run_bt(n_clicks, years, capital):
                           style={"borderRadius": "12px", "overflow": "hidden",
                                  "border": f"1px solid #{C['border']}"})
 
-        # ── Quarterly rebalancing log ──────────────────────────────────────────
-        q_log_table = html.Div()
-        if result.quarterly_log:
-            _qth = lambda label: html.Th(label, style={
-                "padding": "6px 10px", "fontSize": "0.63rem", "fontWeight": "700",
-                "color": f"#{C['muted']}", "textAlign": "left",
-                "textTransform": "uppercase", "letterSpacing": "0.06em",
-                "borderBottom": f"1px solid #{C['border']}",
+        # ── Quarterly follow-along guide ───────────────────────────────────────
+        from collections import defaultdict as _dd  # noqa: PLC0415
+
+        # Group all trades by date
+        _trades_by_date: dict = _dd(list)
+        for t in result.trades:
+            _trades_by_date[t.date].append(t)
+
+        # Reconstruct cost basis at each sell (chronological scan)
+        _running_cost: dict[str, float] = {}
+        _cost_at_sell: dict[tuple, float] = {}
+        for t in sorted(result.trades, key=lambda x: (x.date, 0 if x.action == "BUY" else 1)):
+            if t.action == "BUY":
+                _running_cost[t.ticker] = t.price
+            else:
+                _cost_at_sell[(t.ticker, t.date)] = _running_cost.get(t.ticker, t.price)
+
+        # All stop-loss trades (mid-quarter exits)
+        _all_sl = [t for t in result.trades
+                   if t.action == "SELL" and t.signal == "STOP_LOSS"]
+
+        def _pnl_color(v: float) -> str:
+            return C["green"] if v >= 0 else C["red"]
+
+        def _pnl_str(v: float) -> str:
+            return f"{v:+.1f}%"
+
+        # Build quarterly cards (newest quarter first)
+        q_log_rev = list(reversed(result.quarterly_log))
+        detail_cards = []
+
+        for i, ql in enumerate(q_log_rev):
+            # Quarter-over-quarter portfolio change
+            prev_val = q_log_rev[i + 1].port_value if i + 1 < len(q_log_rev) else capital
+            q_chg    = (ql.port_value - prev_val) / prev_val * 100 if prev_val > 0 else 0
+
+            # Trades executed on this signal_date
+            day_trades = _trades_by_date.get(ql.signal_date, [])
+            new_buys   = sorted(
+                [t for t in day_trades if t.action == "BUY"],
+                key=lambda x: -x.score,
+            )
+            reg_sells  = [t for t in day_trades
+                          if t.action == "SELL" and t.signal != "STOP_LOSS"]
+
+            # Stop-losses that triggered AFTER this quarter's signal_date
+            # and BEFORE the next (more recent) quarter's signal_date
+            period_end = q_log_rev[i - 1].signal_date if i > 0 else "9999-12-31"
+            qtr_sl     = [t for t in _all_sl
+                          if ql.signal_date <= t.date < period_end]
+
+            # Holdings carried over from the previous quarter
+            new_buy_tickers = {t.ticker for t in new_buys}
+            hold_tickers    = sorted(set(ql.holdings) - new_buy_tickers)
+
+            # ── Card header ─────────────────────────────────────────────────
+            chg_color = _pnl_color(q_chg)
+            summary_content = [
+                html.Span("▶ ", className="bt-chevron",
+                          style={"color": f"#{C['muted']}", "fontSize": "0.75rem",
+                                 "marginRight": "6px"}),
+                html.Span(ql.label,
+                          style={"fontWeight": "800", "color": f"#{C['amber']}",
+                                 "fontSize": "0.88rem", "marginRight": "12px"}),
+                html.Span(f"📅 {ql.signal_date}",
+                          style={"color": f"#{C['muted']}", "fontSize": "0.75rem",
+                                 "marginRight": "12px"}),
+                html.Span(f"${ql.port_value:,.0f}",
+                          style={"color": f"#{C['blue']}", "fontWeight": "700",
+                                 "fontSize": "0.82rem", "marginRight": "6px"}),
+                html.Span(_pnl_str(q_chg),
+                          style={"color": f"#{chg_color}", "fontWeight": "700",
+                                 "fontSize": "0.78rem", "marginRight": "16px"}),
+                html.Span(
+                    f"매수 {len(new_buys)}  유지 {len(hold_tickers)}  매도 {len(reg_sells) + len(qtr_sl)}",
+                    style={"color": f"#{C['muted']}", "fontSize": "0.70rem",
+                           "letterSpacing": "0.03em"},
+                ),
+            ]
+
+            # ── Action callout ───────────────────────────────────────────────
+            action_callout = html.Div([
+                html.Span("📋 ", style={"fontSize": "0.85rem"}),
+                html.Span(f"{ql.signal_date}",
+                          style={"fontWeight": "800", "color": f"#{C['text']}",
+                                 "fontSize": "0.82rem"}),
+                html.Span(" 이 날짜에 아래 거래를 실행하세요",
+                          style={"color": f"#{C['muted']}", "fontSize": "0.75rem",
+                                 "marginLeft": "6px"}),
+            ], style={
+                "background": "rgba(75,123,229,0.10)",
+                "border": "1px solid rgba(75,123,229,0.22)",
+                "borderRadius": "8px", "padding": "9px 14px",
+                "marginBottom": "14px",
             })
-            _qtd = lambda val, color=None: html.Td(val, style={
-                "padding": "5px 10px", "fontSize": "0.73rem",
-                "color": f"#{color or C['text']}", "verticalAlign": "top",
-            })
-            q_rows = []
-            for ql in result.quarterly_log:
-                sb_str = "  ".join(ql.strong_buys[:10])
-                q_rows.append(html.Tr([
-                    _qtd(ql.label,       C["amber"]),
-                    _qtd(ql.report_date, C["muted"]),
-                    _qtd(ql.signal_date, C["muted"]),
-                    _qtd(f"{len(ql.strong_buys)} tickers", C["green"]),
-                    _qtd(sb_str or "—"),
-                    _qtd(f"${ql.port_value:,.0f}", C["blue"]),
-                ]))
-            q_header = html.Tr([
-                _qth("Quarter"), _qth("Report Date"), _qth("Signal Date"),
-                _qth("Strong Buys"), _qth("Tickers"), _qth("Port. Value"),
-            ])
-            q_log_table = html.Div([
-                html.Div("분기별 리밸런싱 기록", style={
-                    "fontSize": "0.78rem", "fontWeight": "700",
-                    "color": f"#{C['text']}", "marginBottom": "8px",
-                }),
-                html.Div(
-                    html.Table(
-                        [html.Thead(q_header), html.Tbody(q_rows)],
-                        style={"width": "100%", "borderCollapse": "collapse"},
+
+            # ── New buys ─────────────────────────────────────────────────────
+            total_score_q = sum(t.score for t in new_buys) or 1
+            buy_rows = []
+            for t in new_buys:
+                w_pct  = t.value / ql.port_value * 100 if ql.port_value > 0 else 0
+                bar_px = max(int(w_pct / 30 * 72), 4)  # 30% → 72px max
+                buy_rows.append(html.Div([
+                    html.Span(t.ticker, style={
+                        "fontWeight": "800", "color": f"#{C['blue']}",
+                        "fontSize": "0.85rem", "minWidth": "54px",
+                        "display": "inline-block",
+                    }),
+                    html.Span(t.company[:22], style={
+                        "color": f"#{C['muted']}", "fontSize": "0.72rem",
+                        "flex": "1", "overflow": "hidden",
+                        "textOverflow": "ellipsis", "whiteSpace": "nowrap",
+                    }),
+                    html.Span("매입가 ", style={"color": f"#{C['muted']}",
+                                              "fontSize": "0.68rem"}),
+                    html.Span(f"${t.price:,.2f}", style={
+                        "fontWeight": "700", "color": f"#{C['text']}",
+                        "fontSize": "0.80rem", "minWidth": "80px",
+                    }),
+                    html.Span("투자금 ", style={"color": f"#{C['muted']}",
+                                              "fontSize": "0.68rem"}),
+                    html.Span(f"${t.value:,.0f}", style={
+                        "fontWeight": "700", "color": f"#{C['green']}",
+                        "fontSize": "0.80rem", "minWidth": "80px",
+                    }),
+                    html.Span(f"{w_pct:.1f}%", style={
+                        "color": f"#{C['muted']}", "fontSize": "0.68rem",
+                        "minWidth": "34px", "textAlign": "right",
+                    }),
+                    html.Span(className="bt-weight-bar",
+                              style={"width": f"{bar_px}px", "marginLeft": "4px"}),
+                    html.Span(f"★{t.score:.1f}", style={
+                        "color": f"#{C['amber']}", "fontSize": "0.68rem",
+                        "marginLeft": "10px", "minWidth": "40px",
+                    }),
+                ], style={
+                    "display": "flex", "alignItems": "center", "gap": "6px",
+                    "padding": "5px 0",
+                    "borderBottom": "1px solid rgba(255,255,255,0.04)",
+                }))
+
+            buys_block = html.Div([
+                html.Div([
+                    html.Span("✅ ", style={"fontSize": "0.78rem"}),
+                    html.Span(f"신규 매수 ({len(new_buys)}종목)", style={
+                        "fontWeight": "700", "fontSize": "0.75rem",
+                        "color": f"#{C['green']}",
+                    }),
+                ], style={"marginBottom": "7px"}),
+                *buy_rows,
+            ], style={"marginBottom": "14px"}) if new_buys else html.Div()
+
+            # ── Holds ────────────────────────────────────────────────────────
+            hold_chips = [
+                html.Span(tk, className="bt-ticker-chip") for tk in hold_tickers
+            ]
+            holds_block = html.Div([
+                html.Div([
+                    html.Span("🔄 ", style={"fontSize": "0.78rem"}),
+                    html.Span(f"기존 유지 ({len(hold_tickers)}종목)", style={
+                        "fontWeight": "700", "fontSize": "0.75rem",
+                        "color": f"#{C['blue']}",
+                    }),
+                ], style={"marginBottom": "7px"}),
+                html.Div(hold_chips),
+            ], style={"marginBottom": "14px"}) if hold_tickers else html.Div()
+
+            # ── Regular sells ────────────────────────────────────────────────
+            def _sell_row(t, label_prefix=""):
+                cost    = _cost_at_sell.get((t.ticker, t.date), t.price)
+                pnl_pct = (t.price - cost) / cost * 100 if cost > 0 else 0
+                pnl_usd = t.value - (t.shares * cost)
+                col     = _pnl_color(pnl_pct)
+                return html.Div([
+                    html.Span(label_prefix, style={"fontSize": "0.78rem",
+                                                   "marginRight": "4px"}),
+                    html.Span(t.ticker, style={
+                        "fontWeight": "800", "color": f"#{C['red']}",
+                        "fontSize": "0.85rem", "minWidth": "54px",
+                        "display": "inline-block",
+                    }),
+                    html.Span(t.company[:20] if t.company else t.ticker, style={
+                        "color": f"#{C['muted']}", "fontSize": "0.72rem",
+                        "flex": "1",
+                    }),
+                    html.Span("매도가 ", style={"color": f"#{C['muted']}",
+                                              "fontSize": "0.68rem"}),
+                    html.Span(f"${t.price:,.2f}", style={
+                        "fontWeight": "700", "color": f"#{C['text']}",
+                        "fontSize": "0.80rem", "minWidth": "80px",
+                    }),
+                    html.Span(_pnl_str(pnl_pct), style={
+                        "fontWeight": "700", "color": f"#{col}",
+                        "fontSize": "0.80rem", "minWidth": "55px",
+                        "textAlign": "right",
+                    }),
+                    html.Span(
+                        f"(${abs(pnl_usd):,.0f} {'수익' if pnl_usd >= 0 else '손실'})",
+                        style={"color": f"#{col}", "fontSize": "0.72rem"},
                     ),
-                    style={"overflowX": "auto"},
-                ),
-            ], style={
-                "background": f"#{C['card']}", "borderRadius": "12px",
-                "border": f"1px solid #{C['border']}", "padding": "1rem",
-                "marginBottom": "1rem",
-            })
+                ], style={
+                    "display": "flex", "alignItems": "center", "gap": "6px",
+                    "padding": "5px 0",
+                    "borderBottom": "1px solid rgba(255,255,255,0.04)",
+                })
 
-        # ── Individual trade log ───────────────────────────────────────────────
-        buy_trades = [t for t in result.trades if t.action == "BUY"]
-        trade_table = html.Div()
-        if buy_trades:
-            _th = lambda label: html.Th(label, style={
-                "padding": "6px 12px", "fontSize": "0.63rem", "fontWeight": "700",
-                "color": f"#{C['muted']}", "textAlign": "left",
-                "textTransform": "uppercase", "letterSpacing": "0.06em",
-                "borderBottom": f"1px solid #{C['border']}",
-            })
-            _td = lambda val, color=None: html.Td(val, style={
-                "padding": "5px 12px", "fontSize": "0.73rem",
-                "color": f"#{color or C['text']}", "whiteSpace": "nowrap",
-            })
-            rows = []
-            for t in buy_trades[-60:]:
-                rec_color = C["green"] if "STRONG" in t.signal else C["blue"]
-                rows.append(html.Tr([
-                    _td(t.date,             C["muted"]),
-                    _td(t.ticker,           C["blue"]),
-                    _td(t.company[:26]),
-                    _td(t.signal,           rec_color),
-                    _td(f"{t.score:.1f}",   C["amber"]),
-                    _td(f"${t.price:,.2f}"),
-                    _td(f"${t.value:,.0f}", C["green"]),
-                ]))
-            header = html.Tr([
-                _th("Date"), _th("Ticker"), _th("Company"),
-                _th("Signal"), _th("Score"), _th("Price"), _th("Value"),
-            ])
-            trade_table = html.Div([
-                html.Div("매수 내역 (최근 60건)", style={
-                    "fontSize": "0.78rem", "fontWeight": "700",
-                    "color": f"#{C['text']}", "marginBottom": "8px",
-                }),
-                html.Div(
-                    html.Table([html.Thead(header), html.Tbody(rows)],
-                               style={"width": "100%", "borderCollapse": "collapse"}),
-                    style={"overflowX": "auto"},
-                ),
-            ], style={
-                "background": f"#{C['card']}", "borderRadius": "12px",
-                "border": f"1px solid #{C['border']}", "padding": "1rem",
-            })
+            def _sl_row(t):
+                cost    = _cost_at_sell.get((t.ticker, t.date), t.price)
+                pnl_pct = (t.price - cost) / cost * 100 if cost > 0 else 0
+                pnl_usd = t.value - (t.shares * cost)
+                return html.Div([
+                    html.Span("🛑 ", style={"fontSize": "0.78rem"}),
+                    html.Span(t.ticker, style={
+                        "fontWeight": "800", "color": f"#{C['red']}",
+                        "fontSize": "0.85rem", "minWidth": "54px",
+                        "display": "inline-block",
+                    }),
+                    html.Span(f"손절 {t.date}", style={
+                        "color": f"#{C['muted']}", "fontSize": "0.72rem",
+                        "flex": "1",
+                    }),
+                    html.Span("손절가 ", style={"color": f"#{C['muted']}",
+                                              "fontSize": "0.68rem"}),
+                    html.Span(f"${t.price:,.2f}", style={
+                        "fontWeight": "700", "color": f"#{C['text']}",
+                        "fontSize": "0.80rem", "minWidth": "80px",
+                    }),
+                    html.Span(_pnl_str(pnl_pct), style={
+                        "fontWeight": "700", "color": f"#{C['red']}",
+                        "fontSize": "0.80rem", "minWidth": "55px",
+                        "textAlign": "right",
+                    }),
+                    html.Span(f"(${abs(pnl_usd):,.0f} 손실)",
+                              style={"color": f"#{C['red']}", "fontSize": "0.72rem"}),
+                ], style={
+                    "display": "flex", "alignItems": "center", "gap": "6px",
+                    "padding": "5px 0",
+                    "borderBottom": "1px solid rgba(255,255,255,0.04)",
+                })
 
-        log_section = html.Div([q_log_table, trade_table])
+            exits_block = html.Div()
+            if reg_sells or qtr_sl:
+                exit_rows = [_sell_row(t) for t in reg_sells]
+                exit_rows += [_sl_row(t) for t in qtr_sl]
+                exits_block = html.Div([
+                    html.Div([
+                        html.Span("🔴 ", style={"fontSize": "0.78rem"}),
+                        html.Span(
+                            f"매도 ({len(reg_sells)}건)"
+                            + (f"  +  🛑 손절 ({len(qtr_sl)}건)" if qtr_sl else ""),
+                            style={"fontWeight": "700", "fontSize": "0.75rem",
+                                   "color": f"#{C['red']}"},
+                        ),
+                    ], style={"marginBottom": "7px"}),
+                    *exit_rows,
+                ], style={"marginBottom": "14px"})
+
+            # ── Assemble collapsible card ─────────────────────────────────────
+            is_open = (i == 0)  # open only the latest quarter by default
+            detail_cards.append(
+                html.Details([
+                    html.Summary(summary_content, className="bt-quarter-summary",
+                                 style={
+                                     "padding": "11px 16px",
+                                     "display": "flex", "alignItems": "center",
+                                     "gap": "2px",
+                                 }),
+                    html.Div([
+                        action_callout,
+                        buys_block,
+                        holds_block,
+                        exits_block,
+                    ], style={"padding": "0 16px 14px"}),
+                ],
+                open=is_open,
+                className="bt-quarter-card",
+                style={
+                    "background": f"#{C['card']}", "borderRadius": "10px",
+                    "border": f"1px solid #{C['border']}", "marginBottom": "8px",
+                })
+            )
+
+        log_section = html.Div([
+            html.Div("📋 분기별 투자 실행 가이드",
+                     style={"fontSize": "0.82rem", "fontWeight": "700",
+                            "color": f"#{C['text']}", "marginBottom": "12px"}),
+            html.Div(detail_cards),
+        ])
         return total, alpha, ann, dd, sharpe, win, trades, final, chart, log_section
 
     except Exception as exc:

@@ -641,3 +641,32 @@ details[open] .expander-summary { border-radius: 10px 10px 0 0; }
     margin-right: 8px;
     flex-shrink: 0;
 }
+
+/* ── Backtest: quarterly accordion cards ──────────────────────────────────── */
+.bt-quarter-card { transition: box-shadow 0.15s; }
+.bt-quarter-card:hover { box-shadow: 0 2px 16px rgba(75,123,229,0.10); }
+
+/* Hide the default browser triangle on <details><summary> */
+.bt-quarter-summary { list-style: none; cursor: pointer; user-select: none; }
+.bt-quarter-summary::-webkit-details-marker { display: none; }
+.bt-quarter-summary::marker { display: none; }
+
+/* Chevron rotates when card is open */
+.bt-chevron { display: inline-block; transition: transform 0.2s; font-style: normal; }
+details[open] .bt-chevron { transform: rotate(90deg); }
+
+/* Weight bar inside buy rows */
+.bt-weight-bar {
+    height: 4px; border-radius: 2px;
+    background: #4B7BE5; opacity: 0.65;
+    display: inline-block; vertical-align: middle;
+}
+.bt-ticker-chip {
+    display: inline-block;
+    background: rgba(75,123,229,0.10);
+    border: 1px solid rgba(75,123,229,0.18);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 0.72rem; font-weight: 700;
+    color: #C8CDD8; margin: 2px 3px 2px 0;
+}
