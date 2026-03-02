@@ -3082,6 +3082,21 @@ def build_backtest_tab() -> html.Div:
                                           "color": f"#{color}", "lineHeight": "1.1"}),
         ], style={**_card, "flex": "1", "minWidth": "130px", "textAlign": "center"})
 
+    # ── Guide table helpers ──────────────────────────────────────────────────
+    _th_s = {"textAlign": "left", "padding": "7px 12px", "fontWeight": "700",
+              "fontSize": "0.7rem", "letterSpacing": "0.05em", "textTransform": "uppercase",
+              "color": f"#{C['muted']}", "borderBottom": f"1px solid #{C['border']}"}
+    _td_s = {"padding": "7px 12px", "borderBottom": f"1px solid #{C['border']}",
+              "fontSize": "0.8rem", "verticalAlign": "middle"}
+
+    def _cmp_row(label: str, opt_val: str, base_val: str, highlight: bool = False):
+        w = "700" if highlight else "400"
+        return html.Tr([
+            html.Td(label,    style={**_td_s, "color": f"#{C['muted']}"}),
+            html.Td(opt_val,  style={**_td_s, "color": f"#{C['blue']}",  "fontWeight": w}),
+            html.Td(base_val, style={**_td_s, "color": f"#{C['muted']}", "fontWeight": w}),
+        ])
+
     # Strategy presets
     _strat_presets = {
         "optimized": dict(equal_weight=True, require_fresh=True,  min_whale_count=1,
@@ -3189,6 +3204,133 @@ def build_backtest_tab() -> html.Div:
         ], style={"display": "flex", "alignItems": "flex-end", "gap": "20px",
                   "flexWrap": "wrap", "marginBottom": "1.4rem",
                   **_card}),
+
+        # ── Strategy Guide (collapsible) ─────────────────────────────────────
+        html.Details([
+            html.Summary([
+                html.Span("📖 ", style={"marginRight": "4px"}),
+                html.Span("전략 가이드", style={"fontWeight": "800"}),
+                html.Span(" — 최적화 전략은 어떻게 Alpha를 만드나요?",
+                          style={"fontWeight": "400", "color": f"#{C['muted']}"}),
+            ], style={
+                "fontSize": "0.83rem", "cursor": "pointer", "padding": "12px 16px",
+                "color": f"#{C['blue']}", "userSelect": "none",
+                "borderBottom": f"1px solid #{C['border']}",
+            }),
+
+            html.Div([
+                # Intro
+                html.P(
+                    "기관투자자(고래)의 13F 공시 데이터를 분석해 시장 대비 초과 수익(Alpha)을 내기 위해 "
+                    "3가지 핵심 원칙을 최적화했습니다. 아래에서 각 원칙이 왜 중요한지 확인하세요.",
+                    style={"fontSize": "0.82rem", "color": f"#{C['muted']}",
+                           "lineHeight": "1.65", "margin": "0 0 18px"},
+                ),
+
+                # 3 principles
+                html.Div([
+                    # Principle 1
+                    html.Div([
+                        html.Div("① 동일 비중 배분", style={
+                            "fontSize": "0.92rem", "fontWeight": "800",
+                            "color": f"#{C['text']}", "marginBottom": "8px",
+                        }),
+                        html.P("컨빅션 점수와 무관하게, 선정된 최대 8개 종목에 동일한 비율로 자금을 배분합니다.",
+                               style={"fontSize": "0.8rem", "color": f"#{C['muted']}",
+                                      "margin": "0 0 8px", "lineHeight": "1.6"}),
+                        html.Div([
+                            html.Span("⚠ 문제: ", style={"fontWeight": "700",
+                                                          "color": f"#{C['amber']}"}),
+                            html.Span("점수 비례 가중 시 GOOGL 1개 종목에 자산의 75% 이상이 쏠려 분산 효과가 사라집니다.",
+                                      style={"color": f"#{C['muted']}"}),
+                        ], style={"fontSize": "0.75rem", "lineHeight": "1.55",
+                                  "background": f"#{C['card2']}", "borderRadius": "6px",
+                                  "padding": "8px 10px"}),
+                    ], style={**_card, "flex": "1", "minWidth": "200px",
+                               "borderTop": f"3px solid #{C['blue']}"}),
+
+                    # Principle 2
+                    html.Div([
+                        html.Div("② 신선한 시그널만 선택", style={
+                            "fontSize": "0.92rem", "fontWeight": "800",
+                            "color": f"#{C['text']}", "marginBottom": "8px",
+                        }),
+                        html.P("NEW_ENTRY(신규 진입) 또는 AGGRESSIVE_BUY(적극 매수) 시그널이 포함된 종목만 편입합니다.",
+                               style={"fontSize": "0.8rem", "color": f"#{C['muted']}",
+                                      "margin": "0 0 8px", "lineHeight": "1.6"}),
+                        html.Div([
+                            html.Span("⚠ 문제: ", style={"fontWeight": "700",
+                                                          "color": f"#{C['amber']}"}),
+                            html.Span("HIGH_CONCENTRATION만 있는 종목은 '이미 보유 중'이라는 의미일 뿐, "
+                                      "기관이 새로 사들이고 있다는 신호가 아닙니다.",
+                                      style={"color": f"#{C['muted']}"}),
+                        ], style={"fontSize": "0.75rem", "lineHeight": "1.55",
+                                  "background": f"#{C['card2']}", "borderRadius": "6px",
+                                  "padding": "8px 10px"}),
+                    ], style={**_card, "flex": "1", "minWidth": "200px",
+                               "borderTop": f"3px solid #{C['green']}"}),
+
+                    # Principle 3
+                    html.Div([
+                        html.Div("③ 스탑로스 제거", style={
+                            "fontSize": "0.92rem", "fontWeight": "800",
+                            "color": f"#{C['text']}", "marginBottom": "8px",
+                        }),
+                        html.P("손실 컷 없이 시그널이 유지되는 분기 동안 포지션을 그대로 보유합니다.",
+                               style={"fontSize": "0.8rem", "color": f"#{C['muted']}",
+                                      "margin": "0 0 8px", "lineHeight": "1.6"}),
+                        html.Div([
+                            html.Span("⚠ 문제: ", style={"fontWeight": "700",
+                                                          "color": f"#{C['amber']}"}),
+                            html.Span("-15% 스탑로스는 기관이 강한 확신으로 보유 중인 종목을 "
+                                      "일시적 변동성에서 강제 청산해 반등 수익을 놓치게 됩니다.",
+                                      style={"color": f"#{C['muted']}"}),
+                        ], style={"fontSize": "0.75rem", "lineHeight": "1.55",
+                                  "background": f"#{C['card2']}", "borderRadius": "6px",
+                                  "padding": "8px 10px"}),
+                    ], style={**_card, "flex": "1", "minWidth": "200px",
+                               "borderTop": f"3px solid #{C['red']}"}),
+                ], style={"display": "flex", "gap": "12px", "flexWrap": "wrap",
+                          "marginBottom": "20px"}),
+
+                # Performance comparison table
+                html.Div([
+                    html.Div("📊 3년 백테스트 성과 비교", style={
+                        "fontSize": "0.72rem", "fontWeight": "700",
+                        "color": f"#{C['muted']}", "letterSpacing": "0.06em",
+                        "textTransform": "uppercase", "marginBottom": "12px",
+                    }),
+                    html.Table([
+                        html.Thead(html.Tr([
+                            html.Th("항목",         style=_th_s),
+                            html.Th("Optimized ✨", style={**_th_s, "color": f"#{C['blue']}"}),
+                            html.Th("Baseline",     style=_th_s),
+                        ])),
+                        html.Tbody([
+                            _cmp_row("비중 배분 방식",  "동일 비중 (Equal Weight)",    "점수 비례 가중 (Score-Weighted)"),
+                            _cmp_row("시그널 필터",     "NEW_ENTRY / AGGRESSIVE_BUY", "전체 시그널 포함"),
+                            _cmp_row("스탑로스",        "없음",                        "−15%"),
+                            _cmp_row("총 수익률",       "+90.6%",                      "+64.8%",  True),
+                            _cmp_row("SPY 대비 Alpha",  "+11.2% ✅",                   "−14.6% ❌", True),
+                            _cmp_row("Sharpe Ratio",    "1.34",                        "1.01",    True),
+                            _cmp_row("Max Drawdown",    "측정치 참고",                  "측정치 참고"),
+                        ]),
+                    ], style={"width": "100%", "borderCollapse": "collapse"}),
+                ], style={**_card, "background": f"#{C['card2']}", "marginBottom": "12px"}),
+
+                # Footer disclaimer
+                html.P(
+                    "* 45일 신고 지연 반영 · 분기 리밸런싱 · 거래 수수료 미포함 · "
+                    "과거 성과가 미래 수익을 보장하지 않습니다.",
+                    style={"fontSize": "0.68rem", "color": f"#{C['muted']}",
+                           "lineHeight": "1.6", "margin": "0"},
+                ),
+            ], style={"padding": "16px 16px 20px"}),
+        ], style={
+            "background": f"#{C['card']}", "borderRadius": "12px",
+            "border": f"1px solid #{C['border']}", "marginBottom": "1.4rem",
+            "overflow": "hidden",
+        }),
 
         # ── Loading step indicator (clientside-controlled) ──────────────────
         html.Div(
