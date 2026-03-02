@@ -384,7 +384,11 @@ def _read_news_settings() -> dict:
 
 
 def _summarize_articles_ko(articles: list[dict]) -> list[dict]:
-    """Add 'summary_ko' field to each article using Claude API (claude-haiku-4-5).
+    """Add 'summary_ko' and 'sector_impact' fields to each article using Claude Sonnet.
+
+    Each article gets:
+      summary_ko    — 2-3 sentence Korean summary focused on institutional implication
+      sector_impact — dict with keys 'sector' (str) and 'direction' ('positive'|'negative'|'neutral')
 
     Falls back gracefully — articles without summaries are returned as-is.
     All articles are summarized in a single API call to minimize latency.
@@ -398,43 +402,53 @@ def _summarize_articles_ko(articles: list[dict]) -> list[dict]:
 
     try:
         import anthropic  # noqa: PLC0415
+        import re          # noqa: PLC0415
+        import json as _json  # noqa: PLC0415
         client = anthropic.Anthropic()
 
         numbered = "\n".join(f"{i + 1}. {h}" for i, h in enumerate(headlines))
         prompt = (
-            "아래 영문 기관투자자 관련 뉴스 헤드라인들을 각각 한국어로 1~2문장으로 간결하게 요약해줘. "
-            "기관투자자(헤지펀드, 자산운용사 등)의 움직임과 시장에 대한 시사점을 중심으로 설명해줘. "
-            "번호 순서대로, 각 요약은 한 줄로 작성해줘. 다른 설명 없이 요약문만 출력해줘.\n\n"
-            f"{numbered}"
+            "당신은 기관투자자 동향을 분석하는 전문 애널리스트입니다.\n"
+            "아래 영문 뉴스 헤드라인들을 분석해서 JSON 배열로만 응답해줘. "
+            "다른 텍스트나 마크다운 없이 JSON만 출력해줘.\n\n"
+            "각 항목 형식:\n"
+            "{\n"
+            '  "idx": 1,\n'
+            '  "summary_ko": "2~3문장 한국어 요약. 기관투자자 움직임의 배경과 시장 시사점 포함.",\n'
+            '  "sector": "영향받는 섹터 (Technology/Healthcare/Financials/Energy/Consumer Discretionary/'
+            'Consumer Staples/Industrials/Materials/Real Estate/Communication Services/Utilities/Macro 중 하나)",\n'
+            '  "direction": "positive 또는 negative 또는 neutral"\n'
+            "}\n\n"
+            f"헤드라인:\n{numbered}"
         )
 
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=600,
+            model="claude-sonnet-4-6",
+            max_tokens=1200,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = msg.content[0].text.strip() if msg.content else ""
 
-        # Parse numbered lines: "1. ...", "2. ...", etc.
-        summary_map: dict[int, str] = {}
-        for line in raw.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            # Match "1. summary text" or "1) summary text"
-            import re  # noqa: PLC0415
-            m = re.match(r"^(\d+)[.)]\s*(.+)", line)
-            if m:
-                summary_map[int(m.group(1))] = m.group(2).strip()
+        # Strip markdown fences if present
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"\s*```$", "", raw)
 
-        # Attach summaries back to articles (by position)
+        parsed: list[dict] = _json.loads(raw)
+        impact_map: dict[int, dict] = {int(item["idx"]): item for item in parsed}
+
         result = []
         headline_idx = 0
         for article in articles:
             if article.get("headline"):
                 headline_idx += 1
-                summary = summary_map.get(headline_idx, "")
-                result.append({**article, "summary_ko": summary})
+                item = impact_map.get(headline_idx, {})
+                enriched = dict(article)
+                enriched["summary_ko"]    = item.get("summary_ko", "")
+                enriched["sector_impact"] = {
+                    "sector":    item.get("sector", ""),
+                    "direction": item.get("direction", "neutral"),
+                }
+                result.append(enriched)
             else:
                 result.append(article)
         return result
@@ -584,7 +598,7 @@ def _generate_ai_context(
     whale_style: str,
     filing_type: str,
 ) -> str:
-    """Generate 2-3 sentence Korean investment context using Claude Haiku.
+    """Generate 2-3 sentence Korean investment context using Claude Sonnet.
 
     Used only for high-value alerts: Tier 1 new entries and 13D filings.
     Returns empty string if API unavailable or on any error.
@@ -594,6 +608,7 @@ def _generate_ai_context(
         client = anthropic.Anthropic()
 
         prompt = (
+            f"당신은 기관투자자 동향 전문 애널리스트입니다.\n"
             f"다음 내용을 바탕으로 한국어로 2~3문장의 투자 시사점을 작성해줘.\n"
             f"- 기관투자자: {whale_name} ({whale_style} 스타일)\n"
             f"- 종목: {ticker} ({company})\n"
@@ -604,8 +619,8 @@ def _generate_ai_context(
             "과도한 수식어 없이 간결하게. 번호나 머리말 없이 바로 본문만 출력해줘."
         )
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            model="claude-sonnet-4-6",
+            max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
         return msg.content[0].text.strip() if msg.content else ""

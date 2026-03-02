@@ -468,17 +468,29 @@ def send_daily_news_alert(
         {"type": "divider"},
     ]
 
+    _DIRECTION_ICON = {"positive": "📈", "negative": "📉", "neutral": "➡️"}
+    _DIRECTION_KO   = {"positive": "긍정적",  "negative": "부정적", "neutral": "중립"}
+
     for idx, item in enumerate(items[:5], start=1):
-        headline   = item.get("headline", "")
-        source     = item.get("source", "")
-        url        = item.get("url", "")
-        pub        = item.get("published_at", "")
-        summary_ko = item.get("summary_ko", "")
+        headline      = item.get("headline", "")
+        source        = item.get("source", "")
+        url           = item.get("url", "")
+        pub           = item.get("published_at", "")
+        summary_ko    = item.get("summary_ko", "")
+        sector_impact = item.get("sector_impact", {})
 
         head_text = f"<{url}|{headline}>" if url else headline
         body = f"*{idx}.* {head_text}"
         if summary_ko:
             body += f"\n📌 _{summary_ko}_"
+
+        # Sector impact badge: "📈 Technology — 긍정적"
+        if sector_impact and sector_impact.get("sector"):
+            direction  = sector_impact.get("direction", "neutral")
+            sector_lbl = sector_impact["sector"]
+            dir_icon   = _DIRECTION_ICON.get(direction, "➡️")
+            dir_ko     = _DIRECTION_KO.get(direction, "중립")
+            body += f"\n{dir_icon} *{sector_lbl}* — {dir_ko}"
 
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": body}})
 
@@ -686,19 +698,25 @@ def send_premarket_briefing(
         blocks.append({"type": "divider"})
 
     # ── Institutional news headlines ───────────────────────────────────────────
+    _DIR_ICON = {"positive": "📈", "negative": "📉", "neutral": "➡️"}
+    _DIR_KO   = {"positive": "긍정적", "negative": "부정적", "neutral": "중립"}
     if news_items:
         blocks.append({"type": "section", "text": {"type": "mrkdwn",
             "text": "*🏛️ 기관투자자 동향 뉴스:*"}})
         for item in news_items[:3]:
-            url  = item.get("url", "")
-            head = item.get("headline", "")
-            src  = item.get("source", "")
-            summary_ko = item.get("summary_ko", "")
+            url           = item.get("url", "")
+            head          = item.get("headline", "")
+            src           = item.get("source", "")
+            summary_ko    = item.get("summary_ko", "")
+            sector_impact = item.get("sector_impact", {})
             line = f"• <{url}|{head}>" if url else f"• {head}"
             if src:
                 line += f"  _{src}_"
             if summary_ko:
                 line += f"\n  📌 _{summary_ko}_"
+            if sector_impact and sector_impact.get("sector"):
+                d = sector_impact.get("direction", "neutral")
+                line += f"\n  {_DIR_ICON.get(d,'➡️')} *{sector_impact['sector']}* — {_DIR_KO.get(d,'중립')}"
             blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
 
     blocks.append({"type": "context", "elements": [

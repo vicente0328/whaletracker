@@ -595,10 +595,11 @@ def rebalancing_card(s: dict):
 def build_whale_tab():
     sections = []
 
-    # Sector rotation chart
+    # Sector rotation chart — exclude "Unknown" (unmapped tickers add noise)
     if rotation:
-        sectors = list(rotation.keys())
-        scores  = [rotation[s] for s in sectors]
+        rotation_clean = {s: v for s, v in rotation.items() if s != "Unknown"}
+        sectors = list(rotation_clean.keys())
+        scores  = [rotation_clean[s] for s in sectors]
         colors  = [f"#{C['green']}" if s > 0 else f"#{C['red']}" for s in scores]
 
         fig = go.Figure(go.Bar(
@@ -620,7 +621,7 @@ def build_whale_tab():
         ))
         sections.append(dcc.Graph(figure=fig, config={"displayModeBar": False, "scrollZoom": False},
                                   style={"marginBottom": "0.5rem"}))
-        sections.append(build_sector_context(rotation))
+        sections.append(build_sector_context(rotation_clean))
 
     # Per-whale sections
     sig_priority = {"AGGRESSIVE_BUY": 4, "NEW_ENTRY": 3, "HIGH_CONCENTRATION": 2, "HOLD": 0}
